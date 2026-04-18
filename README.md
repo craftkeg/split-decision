@@ -1,5 +1,7 @@
 # Split Decision
 
+**Play it: <https://craftkeg.github.io/split-decision/>**
+
 A single-page browser game that teaches the difference between **fixed-time** and **anytime-valid** statistical inference — staged inside the November 2024 Tyson vs. Paul broadcast at AT&T Stadium.
 
 You are the PM on call for a Netflix-scale launch. Eight rounds, ten seconds each, seven release cells. One cell has a real regression hiding in the noise. Find it before the bell. Pick wrong and you ship a false alarm. Pick nothing and the broken cell ships live.
@@ -11,9 +13,9 @@ Pick a corner before the opening bell:
 
 ## Play
 
-Open `index.html` in any modern browser, or visit the GitHub Pages deployment if enabled.
+Hosted: <https://craftkeg.github.io/split-decision/>
 
-No build step, no dependencies — one HTML file with inline CSS/JS.
+Or open `index.html` directly in any modern browser. No build step, no dependencies — one HTML file with inline CSS/JS.
 
 ## How scoring works
 
