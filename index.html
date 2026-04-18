@@ -209,41 +209,6 @@
     button:disabled{opacity:.5; cursor:not-allowed;}
     button.primary:disabled{background:rgba(229,9,20,.4); color:rgba(255,255,255,.7);}
 
-    .result{
-      display:flex;
-      flex-direction:column;
-      align-items:flex-start;
-      justify-content:center;
-      gap:2px;
-      flex:1 1 0;
-      min-width:0;
-      overflow:hidden;
-      opacity:0;
-      transition:opacity .18s ease;
-    }
-    .result.show{opacity:1;}
-    .result .big{
-      font-weight:1000;
-      letter-spacing:.2px;
-      font-size:13px;
-      color:var(--text);
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width:100%;
-      line-height:1.2;
-    }
-    .result .msg{
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.25;
-      max-width:100%;
-      display:-webkit-box;
-      -webkit-line-clamp:2;
-      line-clamp:2;
-      -webkit-box-orient:vertical;
-      overflow:hidden;
-    }
     .kbd{
       font-family:var(--mono);
       font-size:11px;
@@ -917,17 +882,6 @@
         min-height:36px;
       }
 
-      /* Result line: full-width row below the HUD when a pick/timeout fires */
-      .result{
-        order:99;
-        flex:1 1 100%;
-        margin-top:4px;
-        padding-top:8px;
-        border-top:1px solid var(--border);
-      }
-      .result .big{ font-size:12.5px; white-space:normal; }
-      .result .msg{ font-size:11.5px; }
-
       /* Board / cells */
       .main{ padding:10px; }
       .board{ padding:10px; }
@@ -973,10 +927,6 @@
   <div class="app">
     <div class="card">
       <div class="header">
-        <div class="result" id="resultBox">
-          <span class="big" id="resultBig"></span>
-          <span class="msg" id="resultMsg"></span>
-        </div>
         <div class="hud">
           <div class="pill gold" id="roundPill"><span class="dot"></span>R <b id="roundNum">1</b>/8 <span class="methodTag" id="methodTag">FIXED-TIME</span></div>
           <div class="pill" title="Score"><span class="dot"></span>Score <b id="scoreNum">0</b></div>
@@ -1007,7 +957,7 @@
           <div class="commentary" id="commentary">
             <div class="commLeft">
               <span class="commLive"><span class="commLiveDot"></span>LIVE</span>
-              <span class="commLabel">RINGSIDE</span>
+              <span class="commLabel" id="commLabel">RINGSIDE</span>
             </div>
             <div class="commLine" id="commLine">
               <span class="commWho">Mauro Ranallo:</span>
@@ -1249,6 +1199,7 @@
     timeLeft: $("timeLeft"),
     ringProg: $("ringProg"),
     commLine: $("commLine"),
+    commLabel: $("commLabel"),
     nextBtn: $("nextBtn"),
     restartBtn: $("restartBtn"),
     replaySameBtn: $("replaySameBtn"),
@@ -1257,9 +1208,6 @@
     replaySameMethod: $("replaySameMethod"),
     replayOtherTag: $("replayOtherTag"),
     replayOtherMethod: $("replayOtherMethod"),
-    resultBox: $("resultBox"),
-    resultBig: $("resultBig"),
-    resultMsg: $("resultMsg"),
     wrappedBox: $("wrappedBox"),
     wrappedTitle: $("wrappedTitle"),
     wrappedOutcome: $("wrappedOutcome"),
@@ -1478,41 +1426,6 @@
       {who:"Rosie Perez", what:"Paul's been waiting for that \u2014 right there, clear as day."},
       {who:"Jessica McCaskill", what:"Tyson leaned in. That's the invitation."},
     ],
-    hitCorrect: [
-      {who:"Mauro Ranallo", what:"Paul plants the feet \u2014 straight right, right on the button!"},
-      {who:"Andre Ward", what:"Ohh! Clean counter \u2014 he saw that one coming the whole way."},
-      {who:"Rosie Perez", what:"That's the punch that mattered \u2014 and it landed."},
-      {who:"Mauro Ranallo", what:"Hook to the body, Tyson's hands came down, and Paul capitalized!"},
-      {who:"Jessica McCaskill", what:"Textbook! Set it up with the jab and landed the right."},
-      {who:"Andre Ward", what:"Pure timing. He waited, and the punch paid him."},
-      {who:"Mauro Ranallo", what:"Uppercut slips through \u2014 Tyson felt every ounce of it."},
-      {who:"Rosie Perez", what:"Right on the mark. Crowd's back on its feet!"},
-    ],
-    hitFP: [
-      {who:"Mauro Ranallo", what:"Paul swings at a shadow \u2014 Tyson wasn't there."},
-      {who:"Andre Ward", what:"Whiff! Telegraphed. Mike slipped it clean."},
-      {who:"Mauro Ranallo", what:"Feint from Tyson and Paul bit on it. Costly miss."},
-      {who:"Rosie Perez", what:"That's his chin exposed \u2014 he got away with one there."},
-      {who:"Jessica McCaskill", what:"Paul overcommitted. That's a punch he'll want back."},
-      {who:"Andre Ward", what:"He swung at the idea of a punch, not the punch itself."},
-      {who:"Mauro Ranallo", what:"Tyson rolled it, Paul stumbled \u2014 lucky he didn't eat the counter."},
-      {who:"Rosie Perez", what:"You can see the frustration flash across his face."},
-    ],
-    hitRightNotSig: [
-      {who:"Andre Ward", what:"Stepped in early \u2014 glanced off the shoulder."},
-      {who:"Mauro Ranallo", what:"Right idea, half a beat quick. Didn't have the range yet."},
-      {who:"Rosie Perez", what:"He read it right \u2014 just needed another breath to set it up."},
-      {who:"Jessica McCaskill", what:"The shot was there \u2014 the timing wasn't, not yet."},
-      {who:"Andre Ward", what:"Good read, rushed execution. Patience wins that one."},
-    ],
-    timeout: [
-      {who:"Mauro Ranallo", what:"Round ends in a clinch \u2014 ref breaks them up."},
-      {who:"Andre Ward", what:"Both men walk back to their corners. Nothing landed late."},
-      {who:"Mauro Ranallo", what:"That's the bell \u2014 a cautious round for both."},
-      {who:"Rosie Perez", what:"No damage either way \u2014 straight to the stools."},
-      {who:"Jessica McCaskill", what:"A feeling-out round. Scorecards barely move."},
-      {who:"Andre Ward", what:"Quiet three minutes. Corners have plenty to talk about."},
-    ],
     halftime: [
       {who:"Mauro Ranallo", what:"That's the bell at four. Paul's up on every card, we head to the corners."},
       {who:"Andre Ward", what:"Stool's down. Cornermen in the ring, water and advice coming."},
@@ -1553,10 +1466,27 @@
     state.lastCommAt = performance.now();
     line.classList.add("fade");
     setTimeout(() => {
+      if (ui.commLabel) ui.commLabel.textContent = "RINGSIDE";
       const who = line.querySelector(".commWho");
       const whatEl = line.querySelector(".commWhat");
       if (who) who.textContent = pick.who + ":";
       if (whatEl) whatEl.textContent = what;
+      line.classList.remove("fade");
+    }, 180);
+  }
+
+  function sayResult(text){
+    const line = ui.commLine;
+    if (!line) return;
+    state.lastCommAt = performance.now();
+    lastCommKey = "";
+    line.classList.add("fade");
+    setTimeout(() => {
+      if (ui.commLabel) ui.commLabel.textContent = "WAR ROOM";
+      const who = line.querySelector(".commWho");
+      const whatEl = line.querySelector(".commWhat");
+      if (who) who.textContent = "Data Scientist:";
+      if (whatEl) whatEl.textContent = text;
       line.classList.remove("fade");
     }, 180);
   }
@@ -1616,10 +1546,6 @@
     state.ended = false;
     state.chosen = null;
     ui.nextBtn.disabled = true;
-
-    ui.resultBox.classList.remove("show");
-    ui.resultBig.textContent = "";
-    ui.resultMsg.textContent = "";
 
     state.winnerIdx = Math.floor(rand() * OPTS);
 
@@ -1772,12 +1698,8 @@
 
     setHud();
 
-    ui.resultBox.classList.add("show");
     const brokenLabel = state.perCell[state.winnerIdx].label;
-    ui.resultBig.textContent = `\u23f1 Missed the catch. \u22121`;
-    ui.resultMsg.textContent = `CELL ${brokenLabel} was broken and shipped live \u2014 no pick on the bell.`;
-
-    say('timeout');
+    sayResult(`No call on the bell. CELL ${brokenLabel} broke and shipped live. (\u22121)`);
 
     ui.nextBtn.disabled = false;
   }
@@ -1801,8 +1723,7 @@
     state.pickTimes.push(elapsed);
 
     let delta = 0;
-    let big = "";
-    let msg = "";
+    let line = "";
     let dotKind = "earlytrue";
     const pickedLabel = state.perCell[i].label;
     const brokenLabel = state.perCell[state.winnerIdx].label;
@@ -1810,19 +1731,15 @@
     if (isBroken){
       delta = 1;
       state.trueSignalsFound += 1;
-      big = `\u2705 Caught the regression. +1`;
-      msg = looksBroken
-        ? `CELL ${brokenLabel} was broken \u2014 you pulled it clean.`
-        : `CELL ${brokenLabel} was broken \u2014 early call, but you got it.`;
+      line = looksBroken
+        ? `Confirmed regression on CELL ${brokenLabel}. Caught clean. (+1)`
+        : `CELL ${brokenLabel} flagged early \u2014 confirmed broken. (+1)`;
       dotKind = "true";
-      say('hitCorrect');
     } else {
       delta = -1;
       state.falsePositives += 1;
-      big = `\uD83E\uDDE8 False alarm on CELL ${pickedLabel}. \u22121`;
-      msg = `Real broken cell was CELL ${brokenLabel} \u2014 still live.`;
+      line = `False alarm on CELL ${pickedLabel}. Real break was CELL ${brokenLabel} \u2014 still shipping. (\u22121)`;
       dotKind = "fp";
-      say('hitFP');
     }
 
     state.score += delta;
@@ -1830,10 +1747,7 @@
     state.decisionDots.push({ t: clamp(elapsed, 0, ROUND_SECONDS), kind: dotKind });
 
     setHud();
-
-    ui.resultBox.classList.add("show");
-    ui.resultBig.textContent = big;
-    ui.resultMsg.textContent = msg;
+    sayResult(line);
 
     ui.nextBtn.disabled = false;
   }
@@ -1920,7 +1834,6 @@
     say('finale');
 
     ui.board.classList.add("dim");
-    ui.resultBox.classList.remove("show");
     ui.wrappedBox.classList.add("show");
 
     ui.wrappedTitle.textContent = "Main Event • Final Score";
@@ -2270,7 +2183,6 @@
     ui.board.classList.remove("dim");
     ui.wrappedBox.classList.remove("show");
     ui.halftimeBox.classList.remove("show");
-    ui.resultBox.classList.remove("show");
     ui.nextBtn.disabled = true;
 
     const existing = document.getElementById("scorecardBox");
