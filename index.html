@@ -1188,6 +1188,13 @@
   const GHOST_TAU_MIN = 1.7;
   const GHOST_TAU_MAX = 3.3;
 
+  const EXPERIMENTS = [
+    "Live Stream Quality", "Top 10 Ranking", "Sign-up Page",
+    "Title Artwork", "Autoplay Previews", "Search Ranking",
+    "Continue Watching", "Push Notifications", "Plan Picker",
+    "Mobile Games Row"
+  ];
+
   const $ = (id) => document.getElementById(id);
   const ui = {
     app: document.querySelector(".app"),
@@ -1237,7 +1244,7 @@
 
     const name = document.createElement("div");
     name.className = "optName";
-    name.innerHTML = `<span class="label">CELL ${i+1}</span><span class="sub">lift CI</span>`;
+    name.innerHTML = `<span class="label">CELL ${i+1}</span><span class="sub"></span>`;
 
     const tag = document.createElement("div");
     tag.className = "sigTag";
@@ -1314,6 +1321,9 @@
     sigSeen: new Set(),
     commCell: 0,
     lastCommAt: 0,
+
+    experimentPool: [],
+    experimentName: "",
   };
 
   const COMM_LINES = {
@@ -1548,6 +1558,12 @@
     state.chosen = null;
     ui.nextBtn.disabled = true;
 
+    state.experimentName = state.experimentPool[state.round - 1] || "";
+    cellEls.forEach(el => {
+      const sub = el.querySelector(".optName .sub");
+      if (sub) sub.textContent = state.experimentName;
+    });
+
     state.winnerIdx = Math.floor(rand() * OPTS);
 
     const p0 = baselineP();
@@ -1700,7 +1716,8 @@
     setHud();
 
     const brokenLabel = state.perCell[state.winnerIdx].label;
-    sayResult(`No call on the bell. CELL ${brokenLabel} broke and shipped live. (\u22121)`);
+    const exp = state.experimentName;
+    sayResult(`No call on the bell. CELL ${brokenLabel} of ${exp} broke and shipped live. (\u22121)`);
 
     ui.nextBtn.disabled = false;
   }
@@ -1728,18 +1745,19 @@
     let dotKind = "earlytrue";
     const pickedLabel = state.perCell[i].label;
     const brokenLabel = state.perCell[state.winnerIdx].label;
+    const exp = state.experimentName;
 
     if (isBroken){
       delta = 1;
       state.trueSignalsFound += 1;
       line = looksBroken
-        ? `Confirmed regression on CELL ${brokenLabel}. Caught clean. (+1)`
-        : `CELL ${brokenLabel} flagged early \u2014 confirmed broken. (+1)`;
+        ? `Confirmed regression on CELL ${brokenLabel} of ${exp}. Caught clean. (+1)`
+        : `CELL ${brokenLabel} of ${exp} flagged early \u2014 confirmed broken. (+1)`;
       dotKind = "true";
     } else {
       delta = -1;
       state.falsePositives += 1;
-      line = `False alarm on CELL ${pickedLabel}. Real break was CELL ${brokenLabel} \u2014 still shipping. (\u22121)`;
+      line = `False alarm on CELL ${pickedLabel} of ${exp}. Real break was CELL ${brokenLabel} \u2014 still shipping. (\u22121)`;
       dotKind = "fp";
     }
 
@@ -2284,9 +2302,19 @@
     state.method = (method === 'av') ? 'av' : 'fixed';
     applyMethodTint();
     ui.introBox.classList.add("hide");
+    state.experimentPool = shuffledExperiments().slice(0, TOTAL_ROUNDS);
     buildBoard();
     setHud();
     newRound();
+  }
+
+  function shuffledExperiments(){
+    const arr = EXPERIMENTS.slice();
+    for (let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(rand() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }
 
   ui.startRedBtn.addEventListener("click", () => startGame('fixed'));
