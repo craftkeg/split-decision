@@ -1,0 +1,2306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Split Decision</title>
+  <style>
+    :root{
+      --bg:#141414;
+      --panel:#181818;
+      --panel2:#1a1a1a;
+      --border:rgba(255,255,255,.08);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.6);
+      --muter:rgba(255,255,255,.4);
+      --netflix:#E50914;
+      --netflix-dim:rgba(229,9,20,.85);
+      --good:#46d369;
+      --bad:#ff5c6c;
+      --blueCorner:#3ea6ff;
+      --shadow: 0 10px 35px rgba(0,0,0,.6);
+      --r:16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background:
+        radial-gradient(1200px 800px at 70% 10%, rgba(229,9,20,.06), transparent 45%),
+        radial-gradient(900px 600px at 20% 80%, rgba(229,9,20,.04), transparent 50%),
+        var(--bg);
+      color:var(--text);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .app{width:min(980px, 100%); display:grid; gap:14px;}
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.03), transparent 25%), var(--panel);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 14px;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+      gap:12px; flex-wrap:wrap;
+      min-height:60px;
+    }
+    .brand{display:flex; align-items:center; gap:10px;}
+    .badge{
+      width:36px;height:36px;border-radius:12px;
+      background:rgba(229,9,20,.2);
+      border:1px solid rgba(229,9,20,.4);
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; user-select:none;
+    }
+    .title{line-height:1.1;}
+    .title .name{font-weight:700; letter-spacing:.2px;}
+    .title .tag{color:var(--muted); font-size:12.5px; margin-top:2px;}
+    .hud{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-left:auto; justify-content:flex-end;}
+    .pill{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:6px 10px; border-radius:999px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      color:var(--muted); font-size:12px; user-select:none; white-space:nowrap;
+    }
+    .pill b{color:var(--text); font-weight:800; font-family:var(--mono);}
+    .pill .dot{width:8px;height:8px;border-radius:50%; background:rgba(255,255,255,.25); display:inline-block;}
+    .pill.gold{border-color:rgba(229,9,20,.3); background:rgba(229,9,20,.12);}
+    .pill.gold .dot{background:var(--netflix);}
+    .methodTag{
+      font-family:var(--mono);
+      font-size:10.5px;
+      letter-spacing:.18em;
+      font-weight:900;
+      padding:2px 7px;
+      border-radius:6px;
+      background:rgba(255,255,255,.08);
+      color:rgba(255,255,255,.85);
+      margin-left:4px;
+    }
+
+    /* Anytime-Valid mode tint (blue corner) */
+    .avMode .pill.gold{
+      border-color:rgba(62,166,255,.35);
+      background:rgba(62,166,255,.12);
+    }
+    .avMode .pill.gold .dot{background:var(--blueCorner);}
+    .avMode .methodTag{
+      background:rgba(62,166,255,.18);
+      color:rgba(190,225,255,.98);
+    }
+    .avMode #ringProg{stroke:var(--blueCorner);}
+    .avMode .badge{
+      background:rgba(62,166,255,.18);
+      border-color:rgba(62,166,255,.45);
+    }
+    .avMode button.primary{
+      background:var(--blueCorner);
+      border-color:rgba(62,166,255,.5);
+      color:#06142a;
+    }
+    .avMode button.primary:hover{
+      background:rgba(62,166,255,.85);
+      border-color:rgba(62,166,255,.65);
+    }
+    .main{
+      padding:14px;
+    }
+    .board{
+      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 25%), var(--panel2);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      padding:12px;
+    }
+    .boardTop{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; margin-bottom:10px; flex-wrap:wrap;
+    }
+    .help{color:var(--muted); font-size:12.5px; line-height:1.3;}
+    .help b{color:var(--text);}
+    .cells{display:grid; gap:10px;}
+    .opt{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:rgba(255,255,255,.02);
+      padding:10px 10px 12px 10px;
+      cursor:pointer;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease, opacity .12s ease;
+      position:relative; overflow:hidden;
+    }
+    .opt:hover{transform: translateY(-1px); border-color:rgba(255,255,255,.14); background:rgba(255,255,255,.03);}
+    .opt:active{transform: translateY(0px) scale(.995);}
+    .opt.disabled{cursor:default; opacity:.82;}
+    .opt.disabled:hover{transform:none; border-color:var(--border); background:rgba(255,255,255,.02);}
+    .optHead{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;}
+    .optName{display:flex; align-items:baseline; gap:10px; font-family:var(--mono);}
+    .optName .label{font-weight:900; letter-spacing:.6px; color:rgba(255,255,255,.9);}
+    .optName .sub{font-size:12px; color:var(--muter); font-family:var(--sans);}
+    .sigTag{
+      font-size:12px; padding:5px 9px; border-radius:999px;
+      border:1px solid var(--border); color:var(--muted); user-select:none; white-space:nowrap;
+      background:rgba(255,255,255,.02);
+    }
+    .ciRow{display:flex; align-items:center; gap:10px;}
+    .ciWrap{
+      position:relative; flex:1; height:16px;
+      border-radius:999px; background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.07);
+      overflow:hidden;
+    }
+    .zero{
+      position:absolute; top:-8px; bottom:-8px; width:1px; left:50%;
+      background:rgba(255,255,255,.14);
+      box-shadow:0 0 0 1px rgba(0,0,0,.2);
+    }
+    .interval{
+      position:absolute; top:50%; height:8px; transform:translateY(-50%);
+      border-radius:999px; background:rgba(255,255,255,.12);
+    }
+    .interval.good{background:rgba(73,242,159,.24);}
+    .interval.bad{background:rgba(255,92,108,.24);}
+    .point{
+      position:absolute; top:50%; width:2px; height:12px;
+      transform:translate(-50%,-50%);
+      background:rgba(255,255,255,.75); border-radius:2px;
+    }
+    .point.good{background:rgba(73,242,159,.9);}
+    .point.bad{background:rgba(255,92,108,.9);}
+    .ciNums{
+      font-family:var(--mono); font-size:12px; color:var(--muted);
+      min-width:132px; text-align:right;
+    }
+
+    .timerPill{display:inline-flex; align-items:center; gap:8px; padding:4px 10px 4px 4px;}
+    .timerPill .ringMini{width:28px; height:28px; position:relative; flex:0 0 auto;}
+    .timerPill .ringMini svg{display:block;}
+    .timerPill b{font-family:var(--mono); font-weight:900; color:var(--text);}
+    .hudBtn{padding:7px 12px; font-size:12.5px; border-radius:999px;}
+    .iconBtn{
+      padding:6px 10px;
+      font-size:16px;
+      line-height:1;
+      min-width:0;
+    }
+    .btnRow{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;}
+    button{
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:800;
+      cursor:pointer;
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    button:hover{background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.14);}
+    button:active{transform:scale(.99);}
+    button.primary{border-color: rgba(229,9,20,.4); background: var(--netflix); color:#fff;}
+    button.primary:hover{background: var(--netflix-dim); border-color: rgba(229,9,20,.5);}
+    button:disabled{opacity:.5; cursor:not-allowed;}
+    button.primary:disabled{background:rgba(229,9,20,.4); color:rgba(255,255,255,.7);}
+
+    .result{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      justify-content:center;
+      gap:2px;
+      flex:1 1 0;
+      min-width:0;
+      overflow:hidden;
+      opacity:0;
+      transition:opacity .18s ease;
+    }
+    .result.show{opacity:1;}
+    .result .big{
+      font-weight:1000;
+      letter-spacing:.2px;
+      font-size:13px;
+      color:var(--text);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
+      line-height:1.2;
+    }
+    .result .msg{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.25;
+      max-width:100%;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+    }
+    .kbd{
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muter);
+      padding:3px 7px;
+      border:1px solid var(--border);
+      border-radius:9px;
+      background:rgba(0,0,0,.12);
+    }
+
+    /* Wrapped card - Modal Overlay */
+    .wrapped{
+      display:none; 
+      position:fixed;
+      top:0; left:0; right:0; bottom:0;
+      z-index:1000;
+      background:rgba(0,0,0,0.7);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+    .wrapped.show{display:flex;}
+    .wrappedCard{
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 25%), var(--panel);
+      border-radius:16px;
+      padding:14px;
+      max-width:min(680px, 100%);
+      max-height:90vh;
+      overflow-y:auto;
+      box-shadow:0 20px 60px rgba(0,0,0,0.8);
+      animation:modalSlideIn 0.3s ease-out;
+    }
+    @keyframes modalSlideIn {
+      from {
+        transform:scale(0.9) translateY(20px);
+        opacity:0;
+      }
+      to {
+        transform:scale(1) translateY(0);
+        opacity:1;
+      }
+    }
+    .wrappedTop{display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;}
+    .wrappedTitle{font-weight:1000; letter-spacing:.2px; font-size:14px;}
+    .wrappedEventTitle{font-weight:1000; letter-spacing:.3px; font-size:16px; color:var(--netflix);}
+
+    /* Fight card header */
+    .fightCard{
+      position:relative;
+      width:100%;
+      border-radius:14px;
+      overflow:hidden;
+      border:1px solid rgba(229,9,20,.35);
+      background:
+        radial-gradient(600px 300px at 10% 0%, rgba(229,9,20,.22), transparent 55%),
+        radial-gradient(600px 300px at 90% 100%, rgba(229,9,20,.18), transparent 55%),
+        linear-gradient(180deg, #0a0a0a, #1a0406);
+      padding:16px 14px;
+      text-align:center;
+      margin-bottom:4px;
+    }
+    .fightPresents{
+      font-size:11px;
+      letter-spacing:.35em;
+      color:var(--muter);
+      text-transform:uppercase;
+      margin-bottom:10px;
+      font-weight:800;
+    }
+    .fightPresents .nflx{color:var(--netflix); font-weight:1000;}
+    .fightersRow{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:10px;
+    }
+    .fighter{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:4px;
+      min-width:0;
+    }
+    .fighterName{
+      font-weight:1000;
+      font-size:clamp(22px, 5.6vw, 36px);
+      letter-spacing:.02em;
+      line-height:.95;
+      color:#fff;
+      text-shadow:0 2px 16px rgba(229,9,20,.35);
+      white-space:nowrap;
+    }
+    .fighterTag{
+      font-size:10.5px;
+      letter-spacing:.25em;
+      color:var(--muter);
+      text-transform:uppercase;
+      font-weight:800;
+    }
+    .vsBadge{
+      font-family:var(--mono);
+      font-weight:1000;
+      font-size:20px;
+      color:#fff;
+      width:44px; height:44px;
+      border-radius:50%;
+      background:var(--netflix);
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 0 0 4px rgba(229,9,20,.2), 0 6px 18px rgba(229,9,20,.45);
+      letter-spacing:0;
+    }
+    .fightMeta{
+      margin-top:12px;
+      font-size:11px;
+      letter-spacing:.28em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.7);
+      font-weight:800;
+    }
+    .fightMeta .dotSep{color:var(--muter); margin:0 8px;}
+    .fightBelt{
+      margin-top:8px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:5px 10px;
+      border-radius:999px;
+      background:rgba(229,9,20,.15);
+      border:1px solid rgba(229,9,20,.45);
+      color:#fff;
+      font-size:10.5px;
+      letter-spacing:.25em;
+      text-transform:uppercase;
+      font-weight:900;
+    }
+
+    .commentary{
+      display:flex; align-items:center; gap:14px;
+      padding:10px 14px;
+      border-radius:12px;
+      border:1px solid rgba(229,9,20,.35);
+      background:
+        radial-gradient(400px 120px at 0% 0%, rgba(229,9,20,.18), transparent 60%),
+        linear-gradient(180deg, #0a0a0a, #150305);
+      margin: 6px 0 12px;
+      min-height:44px;
+    }
+    .commLeft{display:flex; align-items:center; gap:10px; flex-shrink:0;}
+    .commLive{
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:10.5px; letter-spacing:.25em; font-weight:1000;
+      text-transform:uppercase; color:#fff;
+      padding:3px 8px; border-radius:999px;
+      background:var(--netflix); box-shadow:0 0 0 3px rgba(229,9,20,.18);
+    }
+    .commLiveDot{
+      width:7px; height:7px; border-radius:50%; background:#fff;
+      animation: commPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes commPulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+    .commLabel{
+      font-size:10.5px; letter-spacing:.28em; font-weight:900;
+      text-transform:uppercase; color:var(--muter);
+    }
+    .commLine{
+      flex:1 1 auto; min-width:0;
+      display:flex; gap:8px; align-items:baseline;
+      font-size:13.5px; line-height:1.35; color:#fff;
+      transition: opacity .18s ease;
+    }
+    .commLine.fade{opacity:0;}
+    .commWho{
+      font-weight:1000; letter-spacing:.06em;
+      color:#fff; text-shadow:0 1px 6px rgba(229,9,20,.45);
+      flex-shrink:0;
+    }
+    .commWhat{font-weight:500; color:rgba(255,255,255,.92);}
+
+    /* Halftime modal */
+    .halftime{
+      display:none;
+      position:fixed;
+      top:0; left:0; right:0; bottom:0;
+      z-index:1002;
+      background:rgba(0,0,0,0.82);
+      backdrop-filter:blur(10px);
+      -webkit-backdrop-filter:blur(10px);
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+    .halftime.show{display:flex;}
+    .halftimeCard{
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 25%), var(--panel);
+      border-radius:20px;
+      padding:20px;
+      max-width:min(560px, 100%);
+      max-height:92vh;
+      overflow-y:auto;
+      box-shadow:0 25px 70px rgba(0,0,0,0.9);
+      animation:modalSlideIn 0.4s ease-out;
+    }
+    .halftimeTitle{
+      font-size:11px;
+      letter-spacing:.35em;
+      color:var(--muter);
+      text-transform:uppercase;
+      font-weight:900;
+      text-align:center;
+      margin-bottom:8px;
+    }
+    .halftimeHeadline{
+      text-align:center;
+      font-size:22px;
+      font-weight:1000;
+      line-height:1.15;
+      margin-bottom:10px;
+    }
+    .halftimeLine{
+      color:var(--muted);
+      font-size:13.5px;
+      line-height:1.5;
+      text-align:center;
+      margin-bottom:14px;
+    }
+    .halftimeStats{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:8px;
+      margin-bottom:14px;
+    }
+    .htStat{
+      border:1px solid var(--border);
+      background:rgba(0,0,0,.18);
+      border-radius:12px;
+      padding:10px;
+      text-align:center;
+    }
+    .htStat .k{color:var(--muter); font-size:11px; letter-spacing:.1em; text-transform:uppercase; font-weight:800;}
+    .htStat .v{font-family:var(--mono); font-weight:1000; font-size:22px; margin-top:4px;}
+    .htCornerSwap{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:10px;
+      margin:14px 0;
+      padding:12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:rgba(255,255,255,.02);
+    }
+    .htCorner{
+      text-align:center;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .htCorner .cLabel{
+      font-size:10px;
+      letter-spacing:.22em;
+      font-weight:900;
+      text-transform:uppercase;
+    }
+    .htCorner.red .cLabel{color:var(--netflix);}
+    .htCorner.blue .cLabel{color:var(--blueCorner);}
+    .htCorner .cMethod{
+      font-size:13px;
+      font-weight:1000;
+      color:#fff;
+    }
+    .htCorner.red .cMethod{opacity:.55;}
+    .htArrow{
+      font-size:22px;
+      color:var(--muter);
+    }
+    .halftimeBtnRow{
+      display:flex;
+      justify-content:center;
+    }
+    .halftimeBtnRow button{
+      padding:12px 24px;
+      font-size:14px;
+      background:var(--good);
+      border-color:rgba(73,211,105,.5);
+      color:#0a1a10;
+    }
+    .halftimeBtnRow button:hover{
+      background:rgba(73,211,105,.85);
+    }
+
+    /* Final comparison scorecard */
+    .scorecard{
+      margin-top:14px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .scorecardHead{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      background:rgba(0,0,0,.2);
+    }
+    .scorecardHead .col{
+      padding:10px 12px;
+      text-align:center;
+    }
+    .scorecardHead .col.red{
+      border-right:1px solid var(--border);
+      background:rgba(229,9,20,.12);
+    }
+    .scorecardHead .col.blue{
+      background:rgba(62,166,255,.12);
+    }
+    .scorecardHead .corner{
+      font-size:10.5px;
+      letter-spacing:.22em;
+      font-weight:900;
+      text-transform:uppercase;
+    }
+    .scorecardHead .col.red .corner{color:var(--netflix);}
+    .scorecardHead .col.blue .corner{color:var(--blueCorner);}
+    .scorecardHead .rounds{
+      font-size:11px;
+      color:var(--muter);
+      margin-top:2px;
+      font-weight:700;
+    }
+    .scorecardHead .method{
+      font-size:13px;
+      font-weight:1000;
+      color:#fff;
+      margin-top:4px;
+    }
+    .scorecardBody{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .scorecardRow{
+      display:contents;
+    }
+    .scorecardCell{
+      padding:10px 12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      border-top:1px solid var(--border);
+      font-size:13px;
+    }
+    .scorecardCell.left{
+      border-right:1px solid var(--border);
+    }
+    .scorecardCell .k{color:var(--muter); font-size:11.5px; letter-spacing:.05em; font-weight:700;}
+    .scorecardCell .v{font-family:var(--mono); font-weight:1000; font-size:16px;}
+    .scorecardCell.better .v{color:var(--good);}
+    .scorecardCell.worse .v{color:var(--bad);}
+    .wrappedOutcome{margin-top:16px; padding:16px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.02);}
+    .wrappedOutcome.outcomeSuccess{border-color:rgba(73,242,159,.25); background:rgba(73,242,159,.06);}
+    .wrappedOutcome.outcomeIssues{border-color:rgba(229,9,20,.25); background:rgba(229,9,20,.06);}
+    .wrappedOutcome.outcomeFailure{border-color:rgba(255,92,108,.25); background:rgba(255,92,108,.06);}
+    .outcomeHeadline{font-size:22px; font-weight:1000; letter-spacing:.2px; line-height:1.15;}
+    .outcomeHeadline.outcomeSuccess{color:var(--good);}
+    .outcomeHeadline.outcomeIssues{color:var(--netflix);}
+    .outcomeHeadline.outcomeFailure{color:var(--bad);}
+    .outcomeLine{color:var(--muted); font-size:13px; margin-top:8px; line-height:1.4;}
+    .outcomeStats{color:var(--muter); font-size:12px; margin-top:12px; font-family:var(--mono);}
+
+    /* Intro Modal */
+    .intro{
+      display:flex; 
+      position:fixed;
+      top:0; left:0; right:0; bottom:0;
+      z-index:1001;
+      background:rgba(0,0,0,0.8);
+      backdrop-filter:blur(10px);
+      -webkit-backdrop-filter:blur(10px);
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+    .intro.hide{display:none;}
+    .introCard{
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 25%), var(--panel);
+      border-radius:20px;
+      padding:20px;
+      max-width:min(620px, 100%);
+      max-height:92vh;
+      overflow-y:auto;
+      scrollbar-gutter:stable both-edges;
+      box-shadow:0 25px 70px rgba(0,0,0,0.9);
+      animation:modalSlideIn 0.4s ease-out;
+    }
+    .introFightCard{
+      margin-bottom:16px;
+    }
+    .introIntro{
+      text-align:center;
+      padding:0 8px;
+      margin-bottom:16px;
+      font-size:13.5px;
+    }
+    .introTop{
+      display:flex; 
+      align-items:center; 
+      gap:16px; 
+      margin-bottom:20px;
+    }
+    .introTop .badge{
+      width:72px;
+      height:56px;
+      font-size:32px;
+      border-radius:20px;
+    }
+    .introTitle{
+      font-weight:1000; 
+      letter-spacing:.3px; 
+      font-size:18px;
+      color:var(--text);
+    }
+    .introSubtitle{
+      color:var(--muted); 
+      font-size:13px; 
+      margin-top:4px; 
+      line-height:1.4;
+    }
+    .introContent{
+      display:grid; 
+      gap:16px; 
+      margin-bottom:24px;
+    }
+    .introRule, .introScoring{
+      padding:12px 16px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      border-radius:12px;
+    }
+    .introRuleTitle, .introScoringTitle, .introGoalTitle{
+      font-weight:800; 
+      color:var(--text); 
+      margin-bottom:8px;
+    }
+    .introRuleText, .introScoringText, .introGoalText{
+      color:var(--muted); 
+      font-size:13px; 
+      line-height:1.4;
+    }
+    .introGoal{
+      padding:12px 16px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      border-radius:12px;
+    }
+    .introBtnRow{
+      display:flex; 
+      justify-content:center;
+    }
+    .introBtnRow button{
+      padding:12px 24px;
+      font-size:14px;
+    }
+    .introPickPrompt{
+      text-align:center;
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-weight:900;
+      color:var(--muter);
+      margin-bottom:4px;
+    }
+    .introCorners{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    .cornerPick{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:6px;
+      padding:16px 14px;
+      background:rgba(255,255,255,.03);
+      border:2px solid var(--border);
+      border-radius:14px;
+      cursor:pointer;
+      transition: transform .1s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+      text-align:center;
+      font-family:inherit;
+      color:inherit;
+    }
+    .cornerPick:hover{transform:translateY(-2px);}
+    .cornerPick:active{transform:translateY(0) scale(.99);}
+    .cornerPick .cpTag{
+      font-size:10.5px;
+      letter-spacing:.22em;
+      font-weight:900;
+      text-transform:uppercase;
+    }
+    .cornerPick .cpMethod{
+      font-size:16px;
+      font-weight:1000;
+      color:#fff;
+      letter-spacing:.3px;
+    }
+    .cornerPick .cpDesc{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.4;
+    }
+    .cornerPick.red{border-color:rgba(229,9,20,.35); background:rgba(229,9,20,.07);}
+    .cornerPick.red:hover{border-color:rgba(229,9,20,.7); box-shadow:0 0 0 3px rgba(229,9,20,.15); background:rgba(229,9,20,.1);}
+    .cornerPick.red .cpTag{color:var(--netflix);}
+    .cornerPick.blue{border-color:rgba(62,166,255,.35); background:rgba(62,166,255,.07);}
+    .cornerPick.blue:hover{border-color:rgba(62,166,255,.7); box-shadow:0 0 0 3px rgba(62,166,255,.15); background:rgba(62,166,255,.1);}
+    .cornerPick.blue .cpTag{color:var(--blueCorner);}
+
+    .metricGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+      margin-top:10px;
+    }
+    .metric{
+      border:1px solid var(--border);
+      background:rgba(0,0,0,.12);
+      border-radius:12px;
+      padding:10px;
+    }
+    .metric .k{color:var(--muter); font-size:12px;}
+    .metric .v{font-family:var(--mono); font-weight:1000; margin-top:4px;}
+    .timeline{
+      margin-top:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:linear-gradient(135deg, rgba(255,255,255,.04), rgba(0,0,0,.15));
+      border-radius:12px;
+      padding:12px;
+    }
+    .timeline .lbl{color:var(--muter); font-size:12px; margin-bottom:8px;}
+    .bar{
+      position:relative;
+      height:14px;
+      border-radius:999px;
+      background:linear-gradient(90deg, rgba(255,255,255,.04), rgba(229,9,20,.08));
+      overflow:visible;
+      border:1px solid rgba(255,255,255,.1);
+      box-shadow:inset 0 1px 2px rgba(0,0,0,.2);
+    }
+    .bar .tick{
+      position:absolute; top:-6px; bottom:-6px;
+      width:1px; background:rgba(255,255,255,.2);
+      left:50%;
+    }
+    .dotPick{
+      position:absolute; top:50%;
+      width:12px; height:12px; border-radius:50%;
+      transform:translate(-50%,-50%);
+      border:1px solid rgba(255,255,255,.25);
+      background:var(--netflix);
+      box-shadow:0 0 0 4px rgba(229,9,20,.25), 0 1px 3px rgba(0,0,0,.3);
+    }
+    .dotPick.fp{
+      background:rgba(255,92,108,.95);
+      border-color:rgba(255,255,255,.3);
+      box-shadow:0 0 0 4px rgba(255,92,108,.25), 0 1px 3px rgba(0,0,0,.3);
+    }
+    .dotPick.true{
+      background:rgba(73,242,159,.95);
+      border-color:rgba(255,255,255,.3);
+      box-shadow:0 0 0 4px rgba(73,242,159,.25), 0 1px 3px rgba(0,0,0,.3);
+    }
+    .dotPick.earlytrue{
+      background:var(--netflix);
+      border-color:rgba(255,255,255,.3);
+      box-shadow:0 0 0 4px rgba(229,9,20,.25), 0 1px 3px rgba(0,0,0,.3);
+    }
+    .dotPick.miss{
+      background:rgba(200,200,210,.75);
+      border-color:rgba(255,255,255,.25);
+      box-shadow:0 0 0 4px rgba(200,200,210,.18), 0 1px 3px rgba(0,0,0,.3);
+    }
+    .meaning{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:12.5px;
+      line-height:1.35;
+    }
+    .reading{
+      margin-top:10px;
+      border-top:1px solid var(--border);
+      padding-top:10px;
+      display:grid;
+      gap:6px;
+      color:var(--muted);
+      font-size:12.5px;
+      line-height:1.35;
+    }
+    .readingItem{
+      display:grid;
+      gap:10px;
+      text-align:center;
+    }
+    .readingDesc{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.4;
+      font-style:italic;
+      max-width:100%;
+    }
+    .readingDesc.readingLink{
+      color:var(--netflix); 
+      text-decoration:none;
+      cursor:pointer;
+    }
+    .readingDesc.readingLink:hover{
+      text-decoration:underline;
+    }
+    .board.dim{opacity:.45; filter:saturate(.8) blur(2px);}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="header">
+        <div class="result" id="resultBox">
+          <span class="big" id="resultBig"></span>
+          <span class="msg" id="resultMsg"></span>
+        </div>
+        <div class="hud">
+          <div class="pill gold" id="roundPill"><span class="dot"></span>R <b id="roundNum">1</b>/8 <span class="methodTag" id="methodTag">FIXED-TIME</span></div>
+          <div class="pill" title="Score"><span class="dot"></span>Score <b id="scoreNum">0</b></div>
+          <div class="pill" title="False alarms"><span class="dot"></span>FA <b id="fpNum">0</b></div>
+          <div class="pill timerPill">
+            <div class="ringMini" aria-label="timer">
+              <svg viewBox="0 0 64 64" width="28" height="28">
+                <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="8"/>
+                <circle id="ringProg" cx="32" cy="32" r="26" fill="none" stroke="#E50914" stroke-width="8"
+                        stroke-linecap="round"
+                        stroke-dasharray="163.36"
+                        stroke-dashoffset="0"
+                        transform="rotate(-90 32 32)"/>
+              </svg>
+            </div>
+            <b><span id="timeLeft">10</span>s</b>
+          </div>
+          <button class="primary hudBtn" id="nextBtn" disabled>Next</button>
+          <button class="hudBtn iconBtn" id="restartBtn" title="Restart" aria-label="Restart">&#x21bb;</button>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="board" id="board">
+          <div class="boardTop">
+            <div class="help">Keyboard: <span class="kbd">1</span>–<span class="kbd">7</span> pick · <span class="kbd">N</span> next · <span class="kbd">R</span> restart</div>
+          </div>
+          <div class="commentary" id="commentary">
+            <div class="commLeft">
+              <span class="commLive"><span class="commLiveDot"></span>LIVE</span>
+              <span class="commLabel">RINGSIDE</span>
+            </div>
+            <div class="commLine" id="commLine">
+              <span class="commWho">Mauro Ranallo:</span>
+              <span class="commWhat">AT&amp;T Stadium is shaking. Iron Mike walking out to &lsquo;Mama Said Knock You Out&rsquo; &mdash; 72,000 on their feet.</span>
+            </div>
+          </div>
+          <div class="cells" id="cells"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="wrapped" id="wrappedBox">
+    <div class="wrappedCard" id="wrappedCard">
+      <div class="fightCard">
+        <div class="fightPresents"><span class="nflx">NETFLIX</span> &nbsp;PRESENTS</div>
+        <div class="fightersRow">
+          <div class="fighter">
+            <div class="fighterName">TYSON</div>
+            <div class="fighterTag">Iron Mike</div>
+          </div>
+          <div class="vsBadge">VS</div>
+          <div class="fighter">
+            <div class="fighterName">PAUL</div>
+            <div class="fighterTag">The Problem Child</div>
+          </div>
+        </div>
+        <div class="fightMeta">Nov 15 <span class="dotSep">•</span> AT&amp;T Stadium <span class="dotSep">•</span> Arlington, TX</div>
+        <div class="fightBelt" id="wrappedTitle">Main Event • Final Score</div>
+      </div>
+      <div class="wrappedOutcome" id="wrappedOutcome">
+        <div class="outcomeHeadline" id="outcomeHeadline">—</div>
+        <div class="outcomeLine" id="outcomeLine">—</div>
+        <div class="outcomeStats" id="outcomeStats">—</div>
+      </div>
+      <div class="timeline">
+        <div class="lbl">Your decisions across the round window (each dot is one round)</div>
+        <div class="bar" id="timeBar">
+          <div class="tick" title="30s"></div>
+        </div>
+      </div>
+      <div class="reading" id="readingList">
+        <!-- links injected -->
+      </div>
+      <div class="btnRow" style="margin-top:12px; justify-content:center;">
+        <button class="primary" id="downloadBtn">Download Results</button>
+      </div>
+      <div class="introPickPrompt" style="margin-top:14px;">Run it back</div>
+      <div class="introCorners">
+        <button class="cornerPick" id="replaySameBtn" type="button">
+          <div class="cpTag" id="replaySameTag">Same Corner</div>
+          <div class="cpMethod" id="replaySameMethod">Run it back</div>
+          <div class="cpDesc">Same corner, see if you can do better.</div>
+        </button>
+        <button class="cornerPick" id="replayOtherBtn" type="button">
+          <div class="cpTag" id="replayOtherTag">Other Corner</div>
+          <div class="cpMethod" id="replayOtherMethod">Switch sides</div>
+          <div class="cpDesc">Step into the opposite corner and compare.</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Intro Modal -->
+  <div class="intro" id="introBox">
+    <div class="introCard">
+      <div class="fightCard introFightCard">
+        <div class="fightPresents">LIVE ON <span class="nflx">NETFLIX</span></div>
+        <div class="fightersRow">
+          <div class="fighter">
+            <div class="fighterName">TYSON</div>
+            <div class="fighterTag">Iron Mike</div>
+          </div>
+          <div class="vsBadge">VS</div>
+          <div class="fighter">
+            <div class="fighterName">PAUL</div>
+            <div class="fighterTag">The Problem Child</div>
+          </div>
+        </div>
+        <div class="fightMeta">Nov 15 <span class="dotSep">•</span> AT&amp;T Stadium <span class="dotSep">•</span> Arlington, TX</div>
+        <div class="fightBelt">Split Decision &bull; Pre-Fight Briefing</div>
+      </div>
+
+      <div class="introSubtitle introIntro">
+        You're the PM on call. Monitor the release and make sure 60M+ viewers get a clean broadcast.
+      </div>
+
+      <div class="introContent">
+        <div class="introRule">
+          <div class="introRuleText">
+            7 release cells. One has a real regression &mdash; the others are noise. Spot it before the opening bell.
+          </div>
+          <div class="introRuleText" style="margin-top:10px;">
+            Correct cell = <strong>+1</strong> &nbsp;&middot;&nbsp; False alarm = <strong>&minus;1</strong> &nbsp;&middot;&nbsp; No pick = <strong>&minus;1</strong>
+          </div>
+          <div class="introRuleText" style="margin-top:6px; font-size:12px; color:var(--muter);">
+            Every round has real harm. Doing nothing lets it ship.
+          </div>
+        </div>
+
+        <div class="introPickPrompt">Pick your corner</div>
+        <div class="introCorners">
+          <button class="cornerPick red" id="startRedBtn" type="button">
+            <div class="cpTag">Red Corner</div>
+            <div class="cpMethod">Fixed-Time</div>
+            <div class="cpDesc">Classic intervals. Sharp, but every peek is another chance to be fooled by noise.</div>
+          </button>
+          <button class="cornerPick blue" id="startBlueBtn" type="button">
+            <div class="cpTag">Blue Corner</div>
+            <div class="cpMethod">Anytime-Valid</div>
+            <div class="cpDesc">Confidence sequences. Wider bands, but they stay valid every time you look.</div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Halftime Modal -->
+  <div class="halftime" id="halftimeBox">
+    <div class="halftimeCard">
+      <div class="halftimeTitle">End of Round 4 &middot; Halftime</div>
+      <div class="halftimeHeadline" id="halftimeHeadline">The stream is taking hits.</div>
+      <div class="halftimeLine" id="halftimeLine">
+        Your corner hands you a new readout. Anytime-valid confidence sequences &mdash; wider, but they stay valid even when you watch them every second. They don&rsquo;t flinch at noise.
+      </div>
+      <div class="halftimeStats">
+        <div class="htStat"><div class="k">Caught</div><div class="v" id="htCaught">0</div></div>
+        <div class="htStat"><div class="k">False alarms</div><div class="v" id="htFP">0</div></div>
+        <div class="htStat"><div class="k">Score</div><div class="v" id="htScore">0</div></div>
+      </div>
+      <div class="htCornerSwap">
+        <div class="htCorner red">
+          <div class="cLabel">Red Corner</div>
+          <div class="cMethod">Fixed-Time</div>
+        </div>
+        <div class="htArrow">&rarr;</div>
+        <div class="htCorner blue">
+          <div class="cLabel">Blue Corner</div>
+          <div class="cMethod">Anytime-Valid</div>
+        </div>
+      </div>
+      <div class="halftimeBtnRow">
+        <button class="primary" id="changeCornersBtn">Change Corners</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const rand = () => Math.random();
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const median = (arr) => {
+    if (!arr.length) return 0;
+    const a = [...arr].sort((x,y)=>x-y);
+    const m = Math.floor(a.length/2);
+    return a.length % 2 ? a[m] : (a[m-1] + a[m]) / 2;
+  };
+
+  function binomial(n, p){
+    if (n <= 0) return 0;
+    p = clamp(p, 0, 1);
+    if (n <= 40){
+      let k = 0;
+      for (let i=0;i<n;i++) if (rand() < p) k++;
+      return k;
+    }
+    const mean = n * p;
+    const varr = n * p * (1 - p);
+    const sd = Math.sqrt(Math.max(1e-12, varr));
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    let x = Math.round(mean + sd * z);
+    x = clamp(x, 0, n);
+    return x;
+  }
+
+  function wilsonCI(x, n, z=1.6448536269514722){
+    if (n <= 0) return {lo:0, hi:1};
+    const phat = x / n;
+    const z2 = z*z;
+    const denom = 1 + z2/n;
+    const center = (phat + z2/(2*n)) / denom;
+    const half = (z * Math.sqrt((phat*(1-phat) + z2/(4*n))/n)) / denom;
+    return {lo: clamp(center - half, 0, 1), hi: clamp(center + half, 0, 1)};
+  }
+
+  function newcombeDiffCI(xT, nT, xC, nC){
+    const t = wilsonCI(xT, nT);
+    const c = wilsonCI(xC, nC);
+    return { lo: t.lo - c.hi, hi: t.hi - c.lo };
+  }
+
+  // Anytime-valid radius (mixture e-variable) — port of z_radius from
+  // avi/R/e_variables.R (Lindon 2022, arXiv:2210.08589).
+  function avZRadius(g, n, alpha){
+    return Math.sqrt(((g + n) / n) * Math.log((g + n) / (g * alpha * alpha)));
+  }
+  function avDiffCI(xT, nT, xC, nC, g = 1, alpha = 0.10){
+    if (nT <= 0 || nC <= 0) return { lo: -1, hi: 1 };
+    const pT = xT / nT, pC = xC / nC;
+    const est = pT - pC;
+    const se = Math.sqrt((pT*(1-pT))/nT + (pC*(1-pC))/nC);
+    const z = avZRadius(g, nT + nC, alpha);
+    return { lo: est - z*se, hi: est + z*se };
+  }
+
+  const OPTS = 7;
+  const ROUND_SECONDS = 10;
+  const TOTAL_ROUNDS = 8;
+  const HALFTIME_ROUND = 4;
+  const VIEW_SPAN = 0.05;
+  const RATE_PER_SEC = 1680;
+
+  function upliftAbs(){
+    return 0.009 + rand() * 0.009;
+  }
+  function baselineP(){
+    return 0.06 + rand() * 0.10;
+  }
+
+  const GHOST_PROB = 0.35;
+  const GHOST_MAG_MIN = 0.004;
+  const GHOST_MAG_MAX = 0.010;
+  const GHOST_TAU_MIN = 1.7;
+  const GHOST_TAU_MAX = 3.3;
+
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    app: document.querySelector(".app"),
+    cells: $("cells"),
+    board: $("board"),
+    roundNum: $("roundNum"),
+    methodTag: $("methodTag"),
+    scoreNum: $("scoreNum"),
+    fpNum: $("fpNum"),
+    timeLeft: $("timeLeft"),
+    ringProg: $("ringProg"),
+    commLine: $("commLine"),
+    nextBtn: $("nextBtn"),
+    restartBtn: $("restartBtn"),
+    replaySameBtn: $("replaySameBtn"),
+    replayOtherBtn: $("replayOtherBtn"),
+    replaySameTag: $("replaySameTag"),
+    replaySameMethod: $("replaySameMethod"),
+    replayOtherTag: $("replayOtherTag"),
+    replayOtherMethod: $("replayOtherMethod"),
+    resultBox: $("resultBox"),
+    resultBig: $("resultBig"),
+    resultMsg: $("resultMsg"),
+    wrappedBox: $("wrappedBox"),
+    wrappedTitle: $("wrappedTitle"),
+    wrappedOutcome: $("wrappedOutcome"),
+    outcomeHeadline: $("outcomeHeadline"),
+    outcomeLine: $("outcomeLine"),
+    outcomeStats: $("outcomeStats"),
+    timeBar: $("timeBar"),
+    readingList: $("readingList"),
+    downloadBtn: $("downloadBtn"),
+    halftimeBox: $("halftimeBox"),
+    halftimeHeadline: $("halftimeHeadline"),
+    halftimeLine: $("halftimeLine"),
+    htCaught: $("htCaught"),
+    htFP: $("htFP"),
+    htScore: $("htScore"),
+    changeCornersBtn: $("changeCornersBtn"),
+  };
+
+  function makeCellRow(i){
+    const el = document.createElement("div");
+    el.className = "opt";
+    el.dataset.idx = String(i);
+
+    const head = document.createElement("div");
+    head.className = "optHead";
+
+    const name = document.createElement("div");
+    name.className = "optName";
+    name.innerHTML = `<span class="label">CELL ${i+1}</span><span class="sub">lift CI</span>`;
+
+    const tag = document.createElement("div");
+    tag.className = "sigTag";
+    tag.textContent = "…";
+
+    head.appendChild(name);
+    head.appendChild(tag);
+
+    const row = document.createElement("div");
+    row.className = "ciRow";
+
+    const wrap = document.createElement("div");
+    wrap.className = "ciWrap";
+    wrap.innerHTML = `
+      <div class="zero"></div>
+      <div class="interval"></div>
+      <div class="point"></div>
+    `;
+
+    const nums = document.createElement("div");
+    nums.className = "ciNums";
+    nums.textContent = "—";
+
+    row.appendChild(wrap);
+    row.appendChild(nums);
+
+    el.appendChild(head);
+    el.appendChild(row);
+
+    el.addEventListener("click", () => {
+      if (state.ended || state.sessionEnded) return;
+      pick(i);
+    });
+
+    return el;
+  }
+
+  const cellEls = [];
+  function buildBoard(){
+    ui.cells.innerHTML = "";
+    cellEls.length = 0;
+    for (let i=0;i<OPTS;i++){
+      const el = makeCellRow(i);
+      cellEls.push(el);
+      ui.cells.appendChild(el);
+    }
+  }
+
+  const state = {
+    round: 1,
+    score: 0,
+    falsePositives: 0,
+    sessionEnded: false,
+
+    method: 'fixed', // 'fixed' for rounds 1..HALFTIME_ROUND, 'av' for the rest
+    runs: { fixed: null, av: null }, // per-half snapshots
+
+    timer: null,
+    startedAt: 0,
+    ended: false,
+    chosen: null,
+
+    perCell: [],
+    winnerIdx: 0,
+
+    picks: 0,
+    trueSignalsFound: 0,
+    rightButNotSig: 0,
+    noiseInconclusive: 0,
+    timeouts: 0,
+    pickTimes: [],
+    decisionDots: [],
+
+    sigSeen: new Set(),
+    commCell: 0,
+    lastCommAt: 0,
+  };
+
+  const COMM_LINES = {
+    round1: [
+      {who:"Mauro Ranallo", what:"Round one! Tyson comes out flat-footed, stalking \u2014 first jab from Iron Mike!"},
+      {who:"Andre Ward", what:"Paul's circling, using his length. Wants nothing to do with Tyson's power early."},
+      {who:"Mauro Ranallo", what:"Tyson lands a right! Crowd erupts \u2014 shades of the old Mike!"},
+      {who:"Andre Ward", what:"He got one clean. But already breathing heavy at the bell."},
+      {who:"Rosie Perez", what:"Tyson bit down on that mouthpiece. You can see it in his eyes."},
+      {who:"Mauro Ranallo", what:"Paul touching gloves \u2014 sign of respect to a legend."},
+      {who:"Jessica McCaskill", what:"Mike's timing was there early. Just once, but it was there."},
+      {who:"Andre Ward", what:"First exchange and Tyson's already walking back to the corner slow."},
+    ],
+    round2: [
+      {who:"Mauro Ranallo", what:"Round two. Paul starts doubling the jab, keeping Tyson at the end of it."},
+      {who:"Andre Ward", what:"Mike threw maybe three, four punches that round. That's the Tyson we're getting."},
+      {who:"Mauro Ranallo", what:"Tyson coming forward, but nothing behind the shots."},
+      {who:"Rosie Perez", what:"Tyson's corner is yelling at him to breathe. He can hear it."},
+      {who:"Jessica McCaskill", what:"Paul looks comfortable. Too comfortable for a man in there with Iron Mike."},
+      {who:"Andre Ward", what:"Every time Tyson loads up, Paul's already three feet away."},
+    ],
+    round3: [
+      {who:"Mauro Ranallo", what:"Round three \u2014 Paul lands a straight right, Tyson eats it flat."},
+      {who:"Andre Ward", what:"He's gassed. Shoulders dropped, hands at his waist. The legs went first."},
+      {who:"Rosie Perez", what:"You can see the corner talking him through it. This is not the plan."},
+      {who:"Mauro Ranallo", what:"Paul's range-finding with the lead hand and Tyson's got no answer."},
+      {who:"Jessica McCaskill", what:"58 years old, and it's showing \u2014 the reflexes just aren't there tonight."},
+      {who:"Andre Ward", what:"The hook Tyson needed to land? That window closed in round one."},
+    ],
+    round4: [
+      {who:"Mauro Ranallo", what:"Round four. Paul out-landing him three-to-one, pulling away on every card."},
+      {who:"Andre Ward", what:"Tyson's throwing one punch at a time, then resetting. No combinations left."},
+      {who:"Mauro Ranallo", what:"And that's the bell ending the first half of this bout."},
+      {who:"Rosie Perez", what:"The crowd is quiet. That tells you everything about how this is going."},
+      {who:"Jessica McCaskill", what:"Paul's fighting his fight. Jab, step, reset. Textbook."},
+      {who:"Andre Ward", what:"If you're scoring at home \u2014 four to zero, Paul."},
+    ],
+    round5: [
+      {who:"Mauro Ranallo", what:"Round five! Paul straight to the body \u2014 Tyson gives ground."},
+      {who:"Andre Ward", what:"Jake's picking his shots. He knows he doesn't need a knockout."},
+      {who:"Mauro Ranallo", what:"Tyson's mouth open. 58 in a prize ring \u2014 the arithmetic is cruel."},
+      {who:"Rosie Perez", what:"Paul is not trying to hurt him. You can tell."},
+      {who:"Jessica McCaskill", what:"Every clinch, Tyson's hanging on a beat longer than he used to."},
+      {who:"Andre Ward", what:"Paul's leading every exchange. No urgency \u2014 just craft."},
+    ],
+    round6: [
+      {who:"Mauro Ranallo", what:"Round six. Tyson on the ropes, Paul peppering him with the jab."},
+      {who:"Andre Ward", what:"Paul could open up here. He's choosing not to. That's respect."},
+      {who:"Rosie Perez", what:"The crowd's turning \u2014 they came for a fight, not a farewell."},
+      {who:"Mauro Ranallo", what:"Tyson swinging wild \u2014 Paul just sidesteps and taps him with the jab."},
+      {who:"Jessica McCaskill", what:"You can see Paul looking at Mike between shots. He's being careful."},
+      {who:"Andre Ward", what:"This is what an insurmountable lead looks like \u2014 Paul on cruise control."},
+    ],
+    round7: [
+      {who:"Mauro Ranallo", what:"Round seven. Tyson tries to load up \u2014 Paul slips it, lands a counter."},
+      {who:"Andre Ward", what:"Look at the footwork on Paul. He's cruising. He has this on the cards."},
+      {who:"Mauro Ranallo", what:"Boos rolling through AT&T Stadium now."},
+      {who:"Rosie Perez", what:"Some fans heading for the exits \u2014 this isn't the show they wanted."},
+      {who:"Jessica McCaskill", what:"Tyson is running on fumes. Pure pride is keeping him upright."},
+      {who:"Andre Ward", what:"Paul's just clocking rounds now. Waiting for the final bell."},
+    ],
+    round8: [
+      {who:"Mauro Ranallo", what:"Final round! Paul stepping in, easing off the power \u2014 this is a victory lap."},
+      {who:"Andre Ward", what:"He is not going to try to hurt Mike Tyson. That tells you everything."},
+      {who:"Mauro Ranallo", what:"The final bell \u2014 and there it is! Paul bows to Tyson. Class act."},
+      {who:"Rosie Perez", what:"Oh that's beautiful \u2014 Paul bowing to the legend."},
+      {who:"Jessica McCaskill", what:"A moment of grace to close out the night."},
+      {who:"Andre Ward", what:"Both men get to walk out on their own terms. That matters."},
+    ],
+    roundStartGeneric: [
+      {who:"Mauro Ranallo", what:"Here we go, next round underway."},
+      {who:"Andre Ward", what:"Second the bell rings \u2014 Paul's off his stool first."},
+    ],
+    methodAv: [
+      {who:"Andre Ward", what:"Second half \u2014 Paul's settling into a rhythm. Plenty left in the tank."},
+      {who:"Mauro Ranallo", what:"Paul out of his corner first \u2014 he smells the finish line."},
+      {who:"Rosie Perez", what:"He's going to close the show on his terms."},
+    ],
+    midFlavor: [
+      {who:"Andre Ward", what:"Paul working behind the jab \u2014 doubling it up."},
+      {who:"Mauro Ranallo", what:"Netflix stream buckling out there \u2014 millions buffering live."},
+      {who:"Andre Ward", what:"Tyson pawing with the lead hand. No snap on it."},
+      {who:"Rosie Perez", what:"My phone feed just pixelated again \u2014 this broadcast is a mess."},
+      {who:"Mauro Ranallo", what:"Crowd chanting 'Tyson, Tyson' \u2014 trying to will him forward."},
+      {who:"Andre Ward", what:"Mike's mouth is open. He's searching for air."},
+      {who:"Mauro Ranallo", what:"Paul circling right, staying clear of the ropes."},
+      {who:"Andre Ward", what:"Referee's got one eye on Tyson. You can tell."},
+      {who:"Mauro Ranallo", what:"Tyson loads up \u2014 Paul pivots, it misses by a mile."},
+      {who:"Rosie Perez", what:"Ringside, you can hear Tyson's corner begging him to breathe."},
+      {who:"Jessica McCaskill", what:"Paul is measuring range the whole round. Every step is deliberate."},
+      {who:"Mauro Ranallo", what:"Jab, jab, step off \u2014 Paul running the textbook on him."},
+      {who:"Andre Ward", what:"Watch the feet \u2014 Paul never crosses them. Fundamentals."},
+      {who:"Mauro Ranallo", what:"Another clinch \u2014 Tyson using it to breathe."},
+      {who:"Rosie Perez", what:"Paul's corner is calm. Nothing to fix."},
+      {who:"Jessica McCaskill", what:"Tyson needs one shot. And Paul knows it. That's why the distance."},
+      {who:"Mauro Ranallo", what:"Tyson holds the right hand back \u2014 saving it for one clean chance."},
+      {who:"Andre Ward", what:"Every glance from Paul is information. He's reading the room."},
+      {who:"Mauro Ranallo", what:"Fan holding up a sign: 'MIKE, WALK HIM DOWN.' Easier said than done."},
+      {who:"Rosie Perez", what:"Twitter's going off \u2014 the word 'buffer' is trending."},
+      {who:"Andre Ward", what:"Paul fakes the jab, steps off \u2014 Tyson resets, round slips by."},
+      {who:"Mauro Ranallo", what:"Paul drops the hands, chin up \u2014 taunting. Confident."},
+      {who:"Jessica McCaskill", what:"The jab, the jab, the jab. Paul's entire game plan in one punch."},
+      {who:"Mauro Ranallo", what:"Tyson throws a 1-2 \u2014 Paul catches both on the gloves, smiles."},
+      {who:"Andre Ward", what:"No output from Mike. That's when rounds disappear."},
+    ],
+    sigEmerged: [
+      {who:"Mauro Ranallo", what:"Ohhh! Paul finds an opening \u2014 Tyson's hands dropped!"},
+      {who:"Andre Ward", what:"There's the window. Mike just gave him the angle."},
+      {who:"Mauro Ranallo", what:"Tyson's chin up \u2014 Paul sees it, everyone sees it."},
+      {who:"Andre Ward", what:"That's the gap. Paul's eyes just lit up."},
+      {who:"Rosie Perez", what:"Paul's been waiting for that \u2014 right there, clear as day."},
+      {who:"Jessica McCaskill", what:"Tyson leaned in. That's the invitation."},
+    ],
+    hitCorrect: [
+      {who:"Mauro Ranallo", what:"Paul plants the feet \u2014 straight right, right on the button!"},
+      {who:"Andre Ward", what:"Ohh! Clean counter \u2014 he saw that one coming the whole way."},
+      {who:"Rosie Perez", what:"That's the punch that mattered \u2014 and it landed."},
+      {who:"Mauro Ranallo", what:"Hook to the body, Tyson's hands came down, and Paul capitalized!"},
+      {who:"Jessica McCaskill", what:"Textbook! Set it up with the jab and landed the right."},
+      {who:"Andre Ward", what:"Pure timing. He waited, and the punch paid him."},
+      {who:"Mauro Ranallo", what:"Uppercut slips through \u2014 Tyson felt every ounce of it."},
+      {who:"Rosie Perez", what:"Right on the mark. Crowd's back on its feet!"},
+    ],
+    hitFP: [
+      {who:"Mauro Ranallo", what:"Paul swings at a shadow \u2014 Tyson wasn't there."},
+      {who:"Andre Ward", what:"Whiff! Telegraphed. Mike slipped it clean."},
+      {who:"Mauro Ranallo", what:"Feint from Tyson and Paul bit on it. Costly miss."},
+      {who:"Rosie Perez", what:"That's his chin exposed \u2014 he got away with one there."},
+      {who:"Jessica McCaskill", what:"Paul overcommitted. That's a punch he'll want back."},
+      {who:"Andre Ward", what:"He swung at the idea of a punch, not the punch itself."},
+      {who:"Mauro Ranallo", what:"Tyson rolled it, Paul stumbled \u2014 lucky he didn't eat the counter."},
+      {who:"Rosie Perez", what:"You can see the frustration flash across his face."},
+    ],
+    hitRightNotSig: [
+      {who:"Andre Ward", what:"Stepped in early \u2014 glanced off the shoulder."},
+      {who:"Mauro Ranallo", what:"Right idea, half a beat quick. Didn't have the range yet."},
+      {who:"Rosie Perez", what:"He read it right \u2014 just needed another breath to set it up."},
+      {who:"Jessica McCaskill", what:"The shot was there \u2014 the timing wasn't, not yet."},
+      {who:"Andre Ward", what:"Good read, rushed execution. Patience wins that one."},
+    ],
+    timeout: [
+      {who:"Mauro Ranallo", what:"Round ends in a clinch \u2014 ref breaks them up."},
+      {who:"Andre Ward", what:"Both men walk back to their corners. Nothing landed late."},
+      {who:"Mauro Ranallo", what:"That's the bell \u2014 a cautious round for both."},
+      {who:"Rosie Perez", what:"No damage either way \u2014 straight to the stools."},
+      {who:"Jessica McCaskill", what:"A feeling-out round. Scorecards barely move."},
+      {who:"Andre Ward", what:"Quiet three minutes. Corners have plenty to talk about."},
+    ],
+    halftime: [
+      {who:"Mauro Ranallo", what:"That's the bell at four. Paul's up on every card, we head to the corners."},
+      {who:"Andre Ward", what:"Stool's down. Cornermen in the ring, water and advice coming."},
+      {who:"Rosie Perez", what:"Intermission \u2014 everyone's regrouping."},
+    ],
+    postHalftime: [
+      {who:"Mauro Ranallo", what:"And we're back \u2014 blue corner up."},
+      {who:"Andre Ward", what:"Second half begins. Stay patient, same fight."},
+      {who:"Rosie Perez", what:"Fresh stools, same stakes."},
+    ],
+    finale: [
+      {who:"Mauro Ranallo", what:"And there it is \u2014 unanimous decision: 79\u201373, 79\u201373, 80\u201372 \u2014 Jake Paul."},
+      {who:"Andre Ward", what:"Paul bowing to Tyson at center ring. Both men walk out with respect."},
+      {who:"Rosie Perez", what:"What a night in Arlington. A legend said goodbye the right way."},
+      {who:"Jessica McCaskill", what:"Paul fought the smart fight. Tyson gave us one more memory."},
+      {who:"Mauro Ranallo", what:"The scorecards say it all \u2014 Paul, convincingly, on every judge's card."},
+      {who:"Andre Ward", what:"Iron Mike walks out upright. That's the win inside the win."},
+    ],
+  };
+
+  let lastCommKey = "";
+
+  function say(key){
+    const pool = COMM_LINES[key];
+    if (!pool || !pool.length) return;
+    let pick = pool[Math.floor(rand() * pool.length)];
+    const sig = key + "|" + pick.what;
+    if (sig === lastCommKey && pool.length > 1){
+      const idx = pool.indexOf(pick);
+      pick = pool[(idx + 1) % pool.length];
+    }
+    lastCommKey = key + "|" + pick.what;
+    const what = pick.what
+      .replace("{round}", String(state.round))
+      .replace("{cell}", String((state.commCell ?? 0) + 1));
+    const line = ui.commLine;
+    if (!line) return;
+    state.lastCommAt = performance.now();
+    line.classList.add("fade");
+    setTimeout(() => {
+      const who = line.querySelector(".commWho");
+      const whatEl = line.querySelector(".commWhat");
+      if (who) who.textContent = pick.who + ":";
+      if (whatEl) whatEl.textContent = what;
+      line.classList.remove("fade");
+    }, 180);
+  }
+
+  function snapshotStats(){
+    return {
+      score: state.score,
+      trueSignalsFound: state.trueSignalsFound,
+      falsePositives: state.falsePositives,
+      rightButNotSig: state.rightButNotSig,
+      noiseInconclusive: state.noiseInconclusive,
+      timeouts: state.timeouts,
+      picks: state.picks,
+    };
+  }
+
+  // Compute Half 1 (fixed-time) and Half 2 (anytime-valid) deltas from
+  // cumulative stats + the snapshot taken at halftime.
+  function halfStats(){
+    const total = snapshotStats();
+    const atHT = state.runs.fixed || total;
+    const fixed = atHT;
+    const av = {
+      score: total.score - atHT.score,
+      trueSignalsFound: total.trueSignalsFound - atHT.trueSignalsFound,
+      falsePositives: total.falsePositives - atHT.falsePositives,
+      rightButNotSig: total.rightButNotSig - atHT.rightButNotSig,
+      noiseInconclusive: total.noiseInconclusive - atHT.noiseInconclusive,
+      timeouts: total.timeouts - atHT.timeouts,
+      picks: total.picks - atHT.picks,
+    };
+    return { fixed, av, total };
+  }
+
+  function updateRing(fracLeft){
+    const circ = 2*Math.PI*26;
+    const off = circ * (1 - fracLeft);
+    ui.ringProg.setAttribute("stroke-dasharray", String(circ.toFixed(2)));
+    ui.ringProg.setAttribute("stroke-dashoffset", String(off.toFixed(2)));
+  }
+
+  function setHud(){
+    ui.roundNum.textContent = String(state.round);
+    ui.scoreNum.textContent = String(state.score);
+    ui.fpNum.textContent = String(state.falsePositives);
+    if (ui.methodTag){
+      ui.methodTag.textContent = state.method === 'av' ? 'ANYTIME-VALID' : 'FIXED-TIME';
+    }
+  }
+
+  function applyMethodTint(){
+    if (state.method === 'av') ui.app.classList.add('avMode');
+    else ui.app.classList.remove('avMode');
+  }
+
+  function newRound(){
+    state.ended = false;
+    state.chosen = null;
+    ui.nextBtn.disabled = true;
+
+    ui.resultBox.classList.remove("show");
+    ui.resultBig.textContent = "";
+    ui.resultMsg.textContent = "";
+
+    state.winnerIdx = Math.floor(rand() * OPTS);
+
+    const p0 = baselineP();
+    const up = upliftAbs();
+
+    state.perCell = [];
+    for (let i=0;i<OPTS;i++){
+      const isBroken = (i === state.winnerIdx);
+      const pC = clamp(p0 + (rand()-0.5)*0.01, 0.001, 0.999);
+      // Broken cell: negative effect (regression). Others: A/A (no real effect).
+      const pT = clamp(pC + (isBroken ? -up : 0), 0.001, 0.999);
+
+      let ghost = 0;
+      if (!isBroken && rand() < GHOST_PROB){
+        const sign = (rand() < 0.75 ? +1 : -1);
+        ghost = sign * (GHOST_MAG_MIN + rand()*(GHOST_MAG_MAX - GHOST_MAG_MIN));
+      }
+      if (isBroken && rand() < 0.22){
+        ghost = (0.002 + rand()*0.004);
+      }
+      const ghostTau = GHOST_TAU_MIN + rand()*(GHOST_TAU_MAX - GHOST_TAU_MIN);
+
+      state.perCell.push({ pC, pT, xC:0, xT:0, n:0, ghost, ghostTau, label:String(i+1) });
+    }
+
+    state.startedAt = performance.now();
+    ui.timeLeft.textContent = String(ROUND_SECONDS);
+    updateRing(1);
+    cellEls.forEach(el => {
+      el.classList.remove("disabled");
+      el.removeAttribute("title");
+    });
+
+    state.sigSeen = new Set();
+    state.lastCommAt = 0;
+
+    const openerKey = "round" + state.round;
+    say(COMM_LINES[openerKey] ? openerKey : "roundStartGeneric");
+
+    if (state.timer) clearInterval(state.timer);
+    state.timer = setInterval(tick, 100);
+  }
+
+  function stopLoop(){
+    if (state.timer) clearInterval(state.timer);
+    state.timer = null;
+  }
+
+  function tick(){
+    const now = performance.now();
+    const elapsed = (now - state.startedAt) / 1000;
+    const remaining = Math.max(0, ROUND_SECONDS - elapsed);
+
+    ui.timeLeft.textContent = String(Math.ceil(remaining));
+    updateRing(remaining / ROUND_SECONDS);
+
+    const dt = 0.1;
+    const add = Math.max(1, Math.round(RATE_PER_SEC * dt));
+
+    for (const opt of state.perCell){
+      opt.n += add;
+      const ghostNow = opt.ghost * Math.exp(-elapsed / opt.ghostTau);
+      const pC = opt.pC;
+      const pT = clamp(opt.pT + ghostNow, 0.001, 0.999);
+      opt.xC += binomial(add, pC);
+      opt.xT += binomial(add, pT);
+    }
+
+    for (let i=0;i<OPTS;i++){
+      renderCell(i);
+    }
+
+    if (!state.ended && remaining > 0){
+      for (let i=0;i<OPTS;i++){
+        const isSigNow = cellEls[i].dataset.sig === "1";
+        if (isSigNow && !state.sigSeen.has(i)){
+          state.sigSeen.add(i);
+          state.commCell = i;
+          say('sigEmerged');
+        }
+      }
+      if (elapsed > 0.6 && (now - state.lastCommAt) > 1600){
+        say('midFlavor');
+      }
+    }
+
+    if (remaining <= 0){
+      endRoundTimeout();
+    }
+  }
+
+  function renderCell(i){
+    const opt = state.perCell[i];
+    const el = cellEls[i];
+    const ci = state.method === 'av'
+      ? avDiffCI(opt.xT, opt.n, opt.xC, opt.n)
+      : newcombeDiffCI(opt.xT, opt.n, opt.xC, opt.n);
+    const est = (opt.xT/opt.n) - (opt.xC/opt.n);
+
+    const sig = (ci.lo > 0) || (ci.hi < 0);
+    const dir = (ci.lo > 0) ? "good" : ((ci.hi < 0) ? "bad" : "none");
+    const looksBroken = ci.hi < 0;
+
+    const tag = el.querySelector(".sigTag");
+    tag.textContent = looksBroken ? "Looks broken" : (dir === "good" ? "Looks better" : "not sig");
+    tag.style.borderColor = sig ? (dir === "good" ? "rgba(73,242,159,.25)" : "rgba(255,92,108,.25)") : "rgba(255,255,255,.09)";
+    tag.style.background = sig ? (dir === "good" ? "rgba(73,242,159,.08)" : "rgba(255,92,108,.08)") : "rgba(255,255,255,.02)";
+    tag.style.color = sig ? (dir === "good" ? "rgba(73,242,159,.95)" : "rgba(255,92,108,.95)") : "rgba(255,255,255,.62)";
+
+    const wrap = el.querySelector(".ciWrap");
+    const interval = wrap.querySelector(".interval");
+    const point = wrap.querySelector(".point");
+
+    const toX = (v) => clamp((v + VIEW_SPAN) / (2*VIEW_SPAN), 0, 1);
+    const xLo = toX(ci.lo), xHi = toX(ci.hi), xPt = toX(est);
+
+    const w = wrap.clientWidth || 1;
+    const leftPx = xLo * w;
+    const rightPx = xHi * w;
+    const ptPx = xPt * w;
+
+    interval.style.left = `${leftPx}px`;
+    interval.style.width = `${Math.max(2, rightPx - leftPx)}px`;
+    point.style.left = `${ptPx}px`;
+
+    interval.classList.toggle("good", dir === "good");
+    interval.classList.toggle("bad", dir === "bad");
+    point.classList.toggle("good", dir === "good");
+    point.classList.toggle("bad", dir === "bad");
+
+    const nums = el.querySelector(".ciNums");
+    const pct = (x) => (x*100).toFixed(2) + "%";
+    nums.textContent = `${pct(ci.lo)} … ${pct(ci.hi)}`;
+
+    el.dataset.sig = sig ? "1" : "0";
+    el.dataset.looksBroken = looksBroken ? "1" : "0";
+
+  }
+
+  function endRoundTimeout(){
+    if (state.ended || state.sessionEnded) return;
+    state.ended = true;
+    stopLoop();
+    cellEls.forEach(el => el.classList.add("disabled"));
+
+    state.timeouts += 1;
+    state.score -= 1;
+    state.decisionDots.push({ t: ROUND_SECONDS, kind: "miss" });
+
+    setHud();
+
+    ui.resultBox.classList.add("show");
+    const brokenLabel = state.perCell[state.winnerIdx].label;
+    ui.resultBig.textContent = `\u23f1 Missed the catch. \u22121`;
+    ui.resultMsg.textContent = `CELL ${brokenLabel} was broken and shipped live \u2014 no pick on the bell.`;
+
+    say('timeout');
+
+    ui.nextBtn.disabled = false;
+  }
+
+  function pick(i){
+    if (state.ended || state.sessionEnded) return;
+
+    const now = performance.now();
+    const elapsed = (now - state.startedAt) / 1000;
+
+    state.ended = true;
+    state.chosen = i;
+    stopLoop();
+    cellEls.forEach(el => el.classList.add("disabled"));
+
+    const el = cellEls[i];
+    const looksBroken = el.dataset.looksBroken === "1";
+    const isBroken = (i === state.winnerIdx);
+
+    state.picks += 1;
+    state.pickTimes.push(elapsed);
+
+    let delta = 0;
+    let big = "";
+    let msg = "";
+    let dotKind = "earlytrue";
+    const pickedLabel = state.perCell[i].label;
+    const brokenLabel = state.perCell[state.winnerIdx].label;
+
+    if (isBroken){
+      delta = 1;
+      state.trueSignalsFound += 1;
+      big = `\u2705 Caught the regression. +1`;
+      msg = looksBroken
+        ? `CELL ${brokenLabel} was broken \u2014 you pulled it clean.`
+        : `CELL ${brokenLabel} was broken \u2014 early call, but you got it.`;
+      dotKind = "true";
+      say('hitCorrect');
+    } else {
+      delta = -1;
+      state.falsePositives += 1;
+      big = `\uD83E\uDDE8 False alarm on CELL ${pickedLabel}. \u22121`;
+      msg = `Real broken cell was CELL ${brokenLabel} \u2014 still live.`;
+      dotKind = "fp";
+      say('hitFP');
+    }
+
+    state.score += delta;
+
+    state.decisionDots.push({ t: clamp(elapsed, 0, ROUND_SECONDS), kind: dotKind });
+
+    setHud();
+
+    ui.resultBox.classList.add("show");
+    ui.resultBig.textContent = big;
+    ui.resultMsg.textContent = msg;
+
+    ui.nextBtn.disabled = false;
+  }
+
+  function nextRound(){
+    if (state.sessionEnded) return;
+
+    if (state.round >= TOTAL_ROUNDS){
+      endSession();
+      return;
+    }
+
+    state.round += 1;
+    setHud();
+    newRound();
+  }
+
+  function openHalftime(){
+    state.runs.fixed = snapshotStats();
+    ui.htCaught.textContent = String(state.trueSignalsFound);
+    ui.htFP.textContent = String(state.falsePositives);
+    ui.htScore.textContent = String(state.score);
+
+    const fp = state.falsePositives;
+    const ts = state.trueSignalsFound;
+    let headline, line;
+    if (fp >= 2){
+      headline = "Your corner is bleeding.";
+      line = "Too many false alarms. Every time you stopped a healthy release, you acted on noise — and the real regression stayed live. The stream\u2019s already taking hits. A cornerman hands you a new readout: anytime-valid confidence sequences. Wider, but they don\u2019t flinch at noise and stay valid even when you watch them every second.";
+    } else if (ts <= 1){
+      headline = "Something\u2019s slipping through.";
+      line = "Regressions aren\u2019t being flagged in time. Your corner swaps to anytime-valid confidence sequences — wider intervals, but they stay valid even when you\u2019re watching every second. Trust the calls they make.";
+    } else {
+      headline = "Clean first half. Let\u2019s finish it.";
+      line = "You\u2019re reading the data well. Your corner still wants to switch you to anytime-valid confidence sequences for the back half — valid under continuous monitoring, harder to fool with noise.";
+    }
+    ui.halftimeHeadline.textContent = headline;
+    ui.halftimeLine.textContent = line;
+
+    ui.halftimeBox.classList.add("show");
+    ui.nextBtn.disabled = true;
+    say('halftime');
+  }
+
+  function changeCorners(){
+    ui.halftimeBox.classList.remove("show");
+    state.method = 'av';
+    applyMethodTint();
+    state.round += 1;
+    setHud();
+    newRound();
+  }
+
+  function getEventOutcome(fp, ts, rbe, to){
+    const score = ts - fp;
+    const bigSuccess = (ts >= 4 && fp <= 2) || score >= 3;
+    const bigFailure = fp >= 5 || score <= -3;
+
+    if (bigSuccess){
+      return {
+        outcome: "success",
+        headline: "Decision. Tyson vs Paul went off clean.",
+        line: "You caught the regressions before the opening bell. 60M+ viewers saw every punch in crisp quality — no buffering, no drops."
+      };
+    }
+    if (bigFailure){
+      return {
+        outcome: "failure",
+        headline: "The fight made it to the bell, but viewers felt the chop.",
+        line: "Too many false alarms left real regressions live. The stream kept streaming, but buffering and pixel drops hit during the big moments."
+      };
+    }
+    return {
+      outcome: "issues",
+      headline: "The fight streamed, but it took hits.",
+      line: "A few regressions slipped past, or false alarms caused avoidable disruption. Tyson vs Paul made it on air — but not everyone got a clean broadcast."
+    };
+  }
+
+  function endSession(){
+    state.sessionEnded = true;
+    state.runs.av = snapshotStats();
+    ui.nextBtn.disabled = true;
+    say('finale');
+
+    ui.board.classList.add("dim");
+    ui.resultBox.classList.remove("show");
+    ui.wrappedBox.classList.add("show");
+
+    ui.wrappedTitle.textContent = "Main Event • Final Score";
+
+    const res = getEventOutcome(state.falsePositives, state.trueSignalsFound, state.rightButNotSig, state.timeouts);
+    ui.wrappedOutcome.className = "wrappedOutcome outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
+    ui.outcomeHeadline.textContent = res.headline;
+    ui.outcomeHeadline.className = "outcomeHeadline outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
+    ui.outcomeLine.textContent = res.line;
+    ui.outcomeStats.textContent = `Regressions caught: ${state.trueSignalsFound} \u2022 False alarms: ${state.falsePositives} \u2022 Corner: ${state.method === 'av' ? 'Blue (Anytime-Valid)' : 'Red (Fixed-Time)'}`;
+
+    renderReplayPicks();
+    renderDecisionTimeline();
+    injectReadingList([
+      { t: "Anytime-valid linear models (Lindon 2022)", u: "https://arxiv.org/abs/2210.08589" },
+    ]);
+  }
+
+  function renderReplayPicks(){
+    const isAv = state.method === 'av';
+    const same = { cls:'blue', tag:'Blue Corner', method:'Anytime-Valid' };
+    const other = { cls:'red', tag:'Red Corner', method:'Fixed-Time' };
+    const sameCorner = isAv ? same : other;
+    const otherCorner = isAv ? other : same;
+
+    ui.replaySameBtn.classList.remove('red', 'blue');
+    ui.replaySameBtn.classList.add(sameCorner.cls);
+    ui.replaySameTag.textContent = sameCorner.tag;
+    ui.replaySameMethod.textContent = sameCorner.method;
+
+    ui.replayOtherBtn.classList.remove('red', 'blue');
+    ui.replayOtherBtn.classList.add(otherCorner.cls);
+    ui.replayOtherTag.textContent = otherCorner.tag;
+    ui.replayOtherMethod.textContent = otherCorner.method;
+  }
+
+  function renderScorecard(){
+    const { fixed, av } = halfStats();
+    let card = document.getElementById("scorecardBox");
+    if (!card){
+      card = document.createElement("div");
+      card.id = "scorecardBox";
+      card.className = "scorecard";
+      ui.wrappedOutcome.insertAdjacentElement("afterend", card);
+    }
+
+    const cmp = (a, b, betterIsLess) => {
+      if (a === b) return ["", ""];
+      const aBetter = betterIsLess ? a < b : a > b;
+      return aBetter ? ["better", "worse"] : ["worse", "better"];
+    };
+
+    const fpCls = cmp(fixed.falsePositives, av.falsePositives, true);
+    const tsCls = cmp(fixed.trueSignalsFound, av.trueSignalsFound, false);
+    const scCls = cmp(fixed.score, av.score, false);
+
+    card.innerHTML = `
+      <div class="scorecardHead">
+        <div class="col red">
+          <div class="corner">Red Corner</div>
+          <div class="rounds">Rounds 1\u20134</div>
+          <div class="method">Fixed-Time</div>
+        </div>
+        <div class="col blue">
+          <div class="corner">Blue Corner</div>
+          <div class="rounds">Rounds 5\u20138</div>
+          <div class="method">Anytime-Valid</div>
+        </div>
+      </div>
+      <div class="scorecardBody">
+        <div class="scorecardCell left ${tsCls[0]}"><span class="k">Regressions caught</span><span class="v">${fixed.trueSignalsFound}</span></div>
+        <div class="scorecardCell ${tsCls[1]}"><span class="k">Regressions caught</span><span class="v">${av.trueSignalsFound}</span></div>
+        <div class="scorecardCell left ${fpCls[0]}"><span class="k">False alarms</span><span class="v">${fixed.falsePositives}</span></div>
+        <div class="scorecardCell ${fpCls[1]}"><span class="k">False alarms</span><span class="v">${av.falsePositives}</span></div>
+        <div class="scorecardCell left ${scCls[0]}"><span class="k">Score</span><span class="v">${fixed.score >= 0 ? '+' : ''}${fixed.score}</span></div>
+        <div class="scorecardCell ${scCls[1]}"><span class="k">Score</span><span class="v">${av.score >= 0 ? '+' : ''}${av.score}</span></div>
+      </div>
+    `;
+  }
+
+  function renderDecisionTimeline(){
+    const bar = ui.timeBar;
+    [...bar.querySelectorAll(".dotPick")].forEach(n => n.remove());
+
+    const w = bar.clientWidth || 1;
+    const toX = (t) => (t / ROUND_SECONDS) * w;
+
+    for (const d of state.decisionDots){
+      const dot = document.createElement("div");
+      dot.className = "dotPick";
+      if (d.kind === "fp") dot.classList.add("fp");
+      if (d.kind === "true") dot.classList.add("true");
+      if (d.kind === "earlytrue") dot.classList.add("earlytrue");
+      if (d.kind === "miss") dot.classList.add("miss");
+      dot.style.left = `${toX(d.t)}px`;
+      bar.appendChild(dot);
+    }
+  }
+
+  function injectReadingList(items){
+    ui.readingList.innerHTML = "";
+
+    const blurb = document.createElement("div");
+    blurb.className = "readingDesc";
+    blurb.style.fontStyle = "normal";
+    blurb.textContent = "Peeking continuously at fixed-time CIs inflates false alarms \u2014 every glance is another chance to see a spurious crossing. Anytime-valid confidence sequences stay valid at any stopping time. They start wider but don\u2019t get fooled by transient noise.";
+    ui.readingList.appendChild(blurb);
+
+    for (const it of items){
+      const container = document.createElement("div");
+      container.className = "readingItem";
+
+      const desc = document.createElement("a");
+      desc.href = it.u;
+      desc.target = "_blank";
+      desc.rel = "noopener";
+      desc.className = "readingDesc readingLink";
+      desc.textContent = it.t;
+
+      container.appendChild(desc);
+      ui.readingList.appendChild(container);
+    }
+  }
+
+  function downloadWrappedImage(){
+    const W = 1080, H = 1350;
+
+    const title = ui.wrappedTitle.textContent || "Main Event • Final Score";
+    const headline = ui.outcomeHeadline.textContent || "—";
+    const line = ui.outcomeLine.textContent || "";
+    const fp = state.falsePositives;
+    const ts = state.trueSignalsFound;
+    const res = getEventOutcome(fp, ts, state.rightButNotSig, state.timeouts);
+
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const ctx = c.getContext("2d");
+
+    ctx.fillStyle = "#141414";
+    ctx.fillRect(0,0,W,H);
+
+    const accent = res.outcome === "success" ? "70,211,105" : res.outcome === "failure" ? "255,92,108" : "229,9,20";
+    const grd = ctx.createRadialGradient(W*0.75, H*0.12, 10, W*0.75, H*0.12, 600);
+    grd.addColorStop(0, `rgba(${accent},0.15)`);
+    grd.addColorStop(1, `rgba(${accent},0)`);
+    ctx.fillStyle = grd;
+    ctx.fillRect(0,0,W,H);
+
+    const pad = 64;
+    const x = pad, y = pad, w = W - pad*2, h = H - pad*2;
+    roundRect(ctx, x, y, w, h, 34);
+    ctx.fillStyle = "rgba(24,24,24,0.95)";
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${accent},0.35)`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // "NETFLIX PRESENTS"
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "900 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.textAlign = "center";
+    const cxMid = x + w/2;
+    ctx.fillText("NETFLIX   PRESENTS", cxMid, y+70);
+
+    // Fighter names row: TYSON  VS  PAUL
+    ctx.font = "1000 92px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    const tysonX = x + w*0.28;
+    const paulX = x + w*0.72;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("TYSON", tysonX, y+170);
+    ctx.fillText("PAUL", paulX, y+170);
+
+    // VS badge
+    ctx.beginPath();
+    ctx.arc(cxMid, y+150, 38, 0, Math.PI*2);
+    ctx.fillStyle = "#E50914";
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "1000 30px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.textBaseline = "middle";
+    ctx.fillText("VS", cxMid, y+150);
+    ctx.textBaseline = "alphabetic";
+
+    // Fighter tags
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "800 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("IRON MIKE", tysonX, y+210);
+    ctx.fillText("THE PROBLEM CHILD", paulX, y+210);
+
+    // Venue/date
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "800 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("NOV 15  •  AT&T STADIUM  •  ARLINGTON, TX", cxMid, y+250);
+
+    // Reset to left alignment for remaining content
+    ctx.textAlign = "left";
+
+    // Title band
+    ctx.fillStyle = "#E50914";
+    ctx.font = "900 28px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(title, x+48, y+305);
+
+    ctx.fillStyle = res.outcome === "success" ? "rgba(70,211,105,0.95)" : res.outcome === "failure" ? "rgba(255,92,108,0.95)" : "rgba(229,9,20,0.95)";
+    ctx.font = "1000 48px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    wrapText(ctx, headline, x+48, y+365, w-96, 54);
+
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.font = "700 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    wrapText(ctx, line, x+48, y+470, w-96, 36);
+
+    // Single-corner summary panel
+    const isAv = state.method === 'av';
+    const cornerLabel = isAv ? "BLUE CORNER" : "RED CORNER";
+    const cornerMethod = isAv ? "Anytime-Valid" : "Fixed-Time";
+    const cornerRgb = isAv ? "62,166,255" : "229,9,20";
+    const cornerTextRgb = isAv ? "62,166,255" : "255,92,108";
+
+    const scY = y + 600;
+    const scH = 280;
+    const scW = w - 96;
+    const scX = x + 48;
+
+    roundRect(ctx, scX, scY, scW, scH, 22);
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${cornerRgb},0.35)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const headH = 100;
+    ctx.fillStyle = `rgba(${cornerRgb},0.14)`;
+    roundRect(ctx, scX, scY, scW, headH, 0);
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = `rgba(${cornerTextRgb},0.95)`;
+    ctx.font = "900 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(cornerLabel, scX + scW/2, scY + 38);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "1000 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(cornerMethod, scX + scW/2, scY + 78);
+
+    const stats = [
+      ["Regressions caught", String(state.trueSignalsFound)],
+      ["False alarms", String(state.falsePositives)],
+      ["Score", (state.score >= 0 ? '+' : '') + String(state.score)],
+    ];
+    const colW = scW / stats.length;
+    for (let s=0; s<stats.length; s++){
+      const cx = scX + colW*s + colW/2;
+      if (s > 0){
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(scX + colW*s, scY + headH + 20);
+        ctx.lineTo(scX + colW*s, scY + scH - 20);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.font = "800 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.fillText(stats[s][0], cx, scY + headH + 48);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "1000 56px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas";
+      ctx.fillText(stats[s][1], cx, scY + headH + 118);
+    }
+
+    // Footnote
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "800 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    const footnote = isAv
+      ? "Anytime-valid CIs stay valid under continuous monitoring."
+      : "Fixed-time CIs assume one pre-planned look \u2014 each peek adds risk.";
+    ctx.fillText(footnote, scX, scY + scH + 44);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "700 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("arXiv:2210.08589", scX, scY + scH + 70);
+
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "800 24px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas";
+    ctx.fillText("TYSON vs PAUL \u2022 Split Decision", x+48, y+h-52);
+
+    const a = document.createElement("a");
+    a.href = c.toDataURL("image/png");
+    a.download = "split-decision-tyson-vs-paul.png";
+    a.click();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+  }
+
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+    const words = String(text).split(/\s+/);
+    let line = "";
+    for (let n=0;n<words.length;n++){
+      const testLine = line + words[n] + " ";
+      const w = ctx.measureText(testLine).width;
+      if (w > maxWidth && n > 0){
+        ctx.fillText(line.trim(), x, y);
+        line = words[n] + " ";
+        y += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    if (line.trim()) ctx.fillText(line.trim(), x, y);
+  }
+
+  ui.nextBtn.addEventListener("click", () => {
+    if (!ui.nextBtn.disabled) nextRound();
+  });
+
+  function restart(){
+    stopLoop();
+    state.round = 1;
+    state.score = 0;
+    state.falsePositives = 0;
+    state.sessionEnded = false;
+
+    state.method = 'fixed';
+    state.runs = { fixed: null, av: null };
+
+    state.ended = false;
+    state.chosen = null;
+    state.perCell = [];
+    state.winnerIdx = 0;
+
+    state.picks = 0;
+    state.trueSignalsFound = 0;
+    state.rightButNotSig = 0;
+    state.noiseInconclusive = 0;
+    state.timeouts = 0;
+    state.pickTimes = [];
+    state.decisionDots = [];
+
+    applyMethodTint();
+    ui.board.classList.remove("dim");
+    ui.wrappedBox.classList.remove("show");
+    ui.halftimeBox.classList.remove("show");
+    ui.resultBox.classList.remove("show");
+    ui.nextBtn.disabled = true;
+
+    const existing = document.getElementById("scorecardBox");
+    if (existing) existing.remove();
+
+    ui.introBox.classList.remove("hide");
+  }
+
+  function replayWithCorner(method){
+    restart();
+    ui.introBox.classList.add("hide");
+    startGame(method);
+  }
+
+  ui.restartBtn.addEventListener("click", restart);
+  ui.replaySameBtn.addEventListener("click", () => replayWithCorner(state.method));
+  ui.replayOtherBtn.addEventListener("click", () => replayWithCorner(state.method === 'av' ? 'fixed' : 'av'));
+
+  ui.downloadBtn.addEventListener("click", downloadWrappedImage);
+
+  function encodeResults(){
+    const { fixed, av } = halfStats();
+    const r1 = `${fixed.falsePositives},${fixed.trueSignalsFound},${fixed.rightButNotSig},${fixed.timeouts}`;
+    const r2 = `${av.falsePositives},${av.trueSignalsFound},${av.rightButNotSig},${av.timeouts}`;
+    const total = `${state.falsePositives},${state.trueSignalsFound},${state.rightButNotSig},${state.timeouts}`;
+    const dd = state.decisionDots.map(d => `${d.t.toFixed(1)}${d.kind[0]}`).join('-');
+    return `?r=${total}&r1=${r1}&r2=${r2}&d=${dd}`;
+  }
+
+  function shareResults(){
+    const url = window.location.origin + window.location.pathname + encodeResults();
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = ui.shareBtn;
+      const orig = btn.textContent;
+      btn.textContent = "Link Copied!";
+      setTimeout(() => btn.textContent = orig, 2000);
+    }).catch(() => {
+      prompt("Copy this link:", url);
+    });
+  }
+
+  function loadFromUrl(){
+    const params = new URLSearchParams(window.location.search);
+    const results = params.get('r');
+    const r1 = params.get('r1');
+    const r2 = params.get('r2');
+    const dots = params.get('d');
+
+    if (!results || !r1 || !r2) return false;
+
+    const [fp, ts, rbe, to] = results.split(',').map(Number);
+    const [fp1, ts1, rbe1, to1] = r1.split(',').map(Number);
+    const [fp2, ts2, rbe2, to2] = r2.split(',').map(Number);
+    const decisionDots = dots ? dots.split('-').filter(Boolean).map(d => {
+      const t = parseFloat(d.slice(0, -1));
+      const kind = d.slice(-1) === 'f' ? 'fp' : d.slice(-1) === 't' ? 'true' : 'earlytrue';
+      return { t, kind };
+    }) : [];
+
+    state.falsePositives = fp;
+    state.trueSignalsFound = ts;
+    state.rightButNotSig = rbe;
+    state.timeouts = to;
+    state.decisionDots = decisionDots;
+    state.sessionEnded = true;
+
+    state.runs.fixed = { score: ts1 - fp1, trueSignalsFound: ts1, falsePositives: fp1, rightButNotSig: rbe1, timeouts: to1, noiseInconclusive: 0, picks: 0 };
+    state.runs.av    = { score: ts - fp - (ts1 - fp1), trueSignalsFound: ts - ts1, falsePositives: fp - fp1, rightButNotSig: rbe - rbe1, timeouts: to - to1, noiseInconclusive: 0, picks: 0 };
+    state.score = ts - fp;
+
+    ui.board.classList.add("dim");
+    ui.wrappedBox.classList.add("show");
+
+    ui.wrappedTitle.textContent = "Main Event • Final Score";
+
+    const res = getEventOutcome(fp, ts, rbe, to);
+    ui.wrappedOutcome.className = "wrappedOutcome outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
+    ui.outcomeHeadline.textContent = res.headline;
+    ui.outcomeHeadline.className = "outcomeHeadline outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
+    ui.outcomeLine.textContent = res.line;
+    ui.outcomeStats.textContent = `Regressions caught: ${ts} • False alarms: ${fp}`;
+
+    renderScorecard();
+    renderDecisionTimeline();
+    injectReadingList([
+      { t: "Anytime-valid linear models (Lindon 2022)", u: "https://arxiv.org/abs/2210.08589" },
+    ]);
+
+    return true;
+  }
+
+  // Intro Modal
+  ui.introBox = $("introBox");
+  ui.startRedBtn = $("startRedBtn");
+  ui.startBlueBtn = $("startBlueBtn");
+
+  function startGame(method){
+    state.method = (method === 'av') ? 'av' : 'fixed';
+    applyMethodTint();
+    ui.introBox.classList.add("hide");
+    buildBoard();
+    setHud();
+    newRound();
+  }
+
+  ui.startRedBtn.addEventListener("click", () => startGame('fixed'));
+  ui.startBlueBtn.addEventListener("click", () => startGame('av'));
+
+  window.addEventListener("keydown", (e) => {
+    const activeElement = document.activeElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    const k = e.key.toLowerCase();
+
+    if (k >= "1" && k <= "7"){
+      const idx = parseInt(k, 10) - 1;
+      if (idx >= 0 && idx < OPTS) pick(idx);
+    } else if (k === "n"){
+      if (!ui.nextBtn.disabled) nextRound();
+    } else if (k === "r"){
+      restart();
+    }
+  });
+
+  // Check if loading results from URL or show intro
+  if (loadFromUrl()) {
+    ui.introBox.classList.add("hide");
+  } else {
+    // Intro modal is shown by default, game starts when user clicks "Start Monitoring"
+  }
+})();
+</script>
+</body>
+</html>
