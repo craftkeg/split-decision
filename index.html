@@ -142,6 +142,8 @@
     .opt:active{transform: translateY(0px) scale(.995);}
     .opt.disabled{cursor:default; opacity:.82;}
     .opt.disabled:hover{transform:none; border-color:var(--border); background:rgba(255,255,255,.02);}
+    .opt.stopped{cursor:default; opacity:.45; filter:grayscale(.6);}
+    .opt.stopped:hover{transform:none; border-color:var(--border); background:rgba(255,255,255,.02);}
     .optHead{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;}
     .optName{display:flex; align-items:baseline; gap:10px; font-family:var(--mono);}
     .optName .label{font-weight:900; letter-spacing:.6px; color:rgba(255,255,255,.9);}
@@ -931,7 +933,7 @@
         <div class="hud">
           <div class="pill gold" id="roundPill"><span class="dot"></span>R <b id="roundNum">1</b>/8 <span class="methodTag" id="methodTag">FIXED-TIME</span></div>
           <div class="pill" title="Score"><span class="dot"></span>Score <b id="scoreNum">0</b></div>
-          <div class="pill" title="False alarms"><span class="dot"></span>FA <b id="fpNum">0</b></div>
+          <div class="pill" title="Wrong stops (OK or Good cells stopped)"><span class="dot"></span>Wrong <b id="fpNum">0</b></div>
           <div class="pill timerPill">
             <div class="ringMini" aria-label="timer">
               <svg viewBox="0 0 64 64" width="28" height="28">
@@ -996,7 +998,7 @@
         <div class="outcomeStats" id="outcomeStats">—</div>
       </div>
       <div class="timeline">
-        <div class="lbl">Your decisions across the round window (each dot is one round)</div>
+        <div class="lbl">Your stops and misses across each round (green = bad caught, orange = wrong stop, red = missed bad)</div>
         <div class="bar" id="timeBar">
           <div class="tick" title="30s"></div>
         </div>
@@ -1050,13 +1052,13 @@
       <div class="introContent">
         <div class="introRule">
           <div class="introRuleText">
-            7 release cells. One has a real regression &mdash; the others are noise. Spot it before the opening bell.
+            7 cells. Each is <strong>bad</strong> (regression), <strong>ok</strong> (neutral), or <strong>good</strong> (improvement). Find and stop the bad ones.
           </div>
           <div class="introRuleText" style="margin-top:10px;">
-            Correct cell = <strong>+1</strong> &nbsp;&middot;&nbsp; False alarm = <strong>&minus;1</strong> &nbsp;&middot;&nbsp; No pick = <strong>&minus;1</strong>
+            Stop bad = <strong>+2</strong> &nbsp;&middot;&nbsp; Stop ok = <strong>&minus;1</strong> &nbsp;&middot;&nbsp; Stop good = <strong>&minus;2</strong> &nbsp;&middot;&nbsp; Missed bad = <strong>&minus;1 each</strong>
           </div>
           <div class="introRuleText" style="margin-top:6px; font-size:12px; color:var(--muter);">
-            Every round has real harm. Doing nothing lets it ship.
+            Click &ldquo;End Round&rdquo; when finished, or wait for time to run out. Pick any number of cells.
           </div>
         </div>
 
@@ -1072,6 +1074,11 @@
             <div class="cpMethod">Anytime-Valid</div>
             <div class="cpDesc">Confidence sequences. Wider bands, but they stay valid every time you look.</div>
           </button>
+          <button class="cornerPick" id="startBlindBtn" type="button" style="border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04);">
+            <div class="cpTag" style="color:rgba(255,255,255,.6);">Blind Test</div>
+            <div class="cpMethod" style="color:rgba(255,255,255,.85);">Method Hidden</div>
+            <div class="cpDesc">Method switches randomly each round. Can you tell Fixed-Time from Anytime-Valid by feel? See your score by method at the end.</div>
+          </button>
         </div>
       </div>
     </div>
@@ -1086,8 +1093,8 @@
         Your corner hands you a new readout. Anytime-valid confidence sequences &mdash; wider, but they stay valid even when you watch them every second. They don&rsquo;t flinch at noise.
       </div>
       <div class="halftimeStats">
-        <div class="htStat"><div class="k">Caught</div><div class="v" id="htCaught">0</div></div>
-        <div class="htStat"><div class="k">False alarms</div><div class="v" id="htFP">0</div></div>
+        <div class="htStat"><div class="k">Bad caught</div><div class="v" id="htCaught">0</div></div>
+        <div class="htStat"><div class="k">Wrong stops</div><div class="v" id="htFP">0</div></div>
         <div class="htStat"><div class="k">Score</div><div class="v" id="htScore">0</div></div>
       </div>
       <div class="htCornerSwap">
@@ -1309,6 +1316,7 @@
 
     perCell: [],
     cellTypes: [],
+    pickedCells: new Set(),
 
     picks: 0,
     trueSignalsFound: 0,
@@ -1324,6 +1332,14 @@
 
     experimentPool: [],
     experimentName: "",
+
+    // Blind mode state
+    gameMode: 'fixed',          // 'fixed' | 'av' | 'blind'
+    roundMethod: 'fixed',       // actual method used this round
+    roundNScale: 1,             // per-round sample-rate scale (masks CI width in blind mode)
+    roundScoreAtStart: 0,       // score at start of round (for per-method attribution)
+    blindMethodRounds: { fixed: [], av: [] }, // round numbers by method in blind mode
+    blindMethodScores: { fixed: 0, av: 0 },  // score delta by method in blind mode
   };
 
   const COMM_LINES = {
@@ -1544,7 +1560,11 @@
     ui.scoreNum.textContent = String(state.score);
     ui.fpNum.textContent = String(state.falsePositives);
     if (ui.methodTag){
-      ui.methodTag.textContent = state.method === 'av' ? 'ANYTIME-VALID' : 'FIXED-TIME';
+      if (state.gameMode === 'blind') {
+        ui.methodTag.textContent = state.ended ? (state.roundMethod === 'av' ? 'ANYTIME-VALID' : 'FIXED-TIME') : '???';
+      } else {
+        ui.methodTag.textContent = state.method === 'av' ? 'ANYTIME-VALID' : 'FIXED-TIME';
+      }
     }
   }
 
@@ -1556,7 +1576,22 @@
   function newRound(){
     state.ended = false;
     state.chosen = null;
-    ui.nextBtn.disabled = true;
+    state.pickedCells = new Set();
+    state.roundScoreAtStart = state.score;
+
+    // Blind mode: randomly assign method and n-scale this round
+    if (state.gameMode === 'blind') {
+      state.roundMethod = rand() < 0.5 ? 'fixed' : 'av';
+      state.method = state.roundMethod;
+      state.roundNScale = 0.35 + rand() * 1.3; // 0.35–1.65× to mask CI width
+      applyMethodTint();
+    } else {
+      state.roundMethod = state.method;
+      state.roundNScale = 1;
+    }
+
+    ui.nextBtn.disabled = false;
+    ui.nextBtn.textContent = "End Round";
 
     state.experimentName = state.experimentPool[state.round - 1] || "";
     cellEls.forEach(el => {
@@ -1605,8 +1640,16 @@
     ui.timeLeft.textContent = String(ROUND_SECONDS);
     updateRing(1);
     cellEls.forEach(el => {
-      el.classList.remove("disabled");
+      el.classList.remove("disabled", "stopped");
       el.removeAttribute("title");
+      // Reset sigTag to neutral state (will be rewritten by renderCell on first tick)
+      const tag = el.querySelector(".sigTag");
+      if (tag) {
+        tag.textContent = "";
+        tag.style.borderColor = "";
+        tag.style.background  = "";
+        tag.style.color       = "";
+      }
     });
 
     state.sigSeen = new Set();
@@ -1633,9 +1676,11 @@
     updateRing(remaining / ROUND_SECONDS);
 
     const dt = 0.1;
-    const add = Math.max(1, Math.round(RATE_PER_SEC * dt));
+    const add = Math.max(1, Math.round(RATE_PER_SEC * state.roundNScale * dt));
 
-    for (const opt of state.perCell){
+    for (let i = 0; i < state.perCell.length; i++){
+      if (state.pickedCells.has(i)) continue; // frozen once stopped
+      const opt = state.perCell[i];
       opt.n += add;
       const ghostNow = opt.ghost * Math.exp(-elapsed / opt.ghostTau);
       const pC = opt.pC;
@@ -1670,6 +1715,8 @@
   function renderCell(i){
     const opt = state.perCell[i];
     const el = cellEls[i];
+    const isStopped = state.pickedCells.has(i);
+
     const ci = state.method === 'av'
       ? avDiffCI(opt.xT, opt.n, opt.xC, opt.n)
       : newcombeDiffCI(opt.xT, opt.n, opt.xC, opt.n);
@@ -1679,11 +1726,14 @@
     const dir = (ci.lo > 0) ? "good" : ((ci.hi < 0) ? "bad" : "none");
     const looksBroken = ci.hi < 0;
 
-    const tag = el.querySelector(".sigTag");
-    tag.textContent = looksBroken ? "Looks broken" : (dir === "good" ? "Looks better" : "not sig");
-    tag.style.borderColor = sig ? (dir === "good" ? "rgba(73,242,159,.25)" : "rgba(255,92,108,.25)") : "rgba(255,255,255,.09)";
-    tag.style.background = sig ? (dir === "good" ? "rgba(73,242,159,.08)" : "rgba(255,92,108,.08)") : "rgba(255,255,255,.02)";
-    tag.style.color = sig ? (dir === "good" ? "rgba(73,242,159,.95)" : "rgba(255,92,108,.95)") : "rgba(255,255,255,.62)";
+    // Don't overwrite the "STOPPED" tag on stopped cells
+    if (!isStopped){
+      const tag = el.querySelector(".sigTag");
+      tag.textContent = looksBroken ? "Looks broken" : (dir === "good" ? "Looks better" : "not sig");
+      tag.style.borderColor = sig ? (dir === "good" ? "rgba(73,242,159,.25)" : "rgba(255,92,108,.25)") : "rgba(255,255,255,.09)";
+      tag.style.background = sig ? (dir === "good" ? "rgba(73,242,159,.08)" : "rgba(255,92,108,.08)") : "rgba(255,255,255,.02)";
+      tag.style.color = sig ? (dir === "good" ? "rgba(73,242,159,.95)" : "rgba(255,92,108,.95)") : "rgba(255,255,255,.62)";
+    }
 
     const wrap = el.querySelector(".ciWrap");
     const interval = wrap.querySelector(".interval");
@@ -1715,97 +1765,131 @@
 
   }
 
-  function revealCellTypes(){
-    const TYPE_LABEL = { bad: '▼ BAD', ok: '● OK', good: '▲ GOOD' };
-    const TYPE_COLOR = {
-      bad:  { border: 'rgba(255,92,108,.5)',   bg: 'rgba(255,92,108,.15)',  text: 'rgba(255,92,108,.95)'  },
-      ok:   { border: 'rgba(255,255,255,.15)', bg: 'rgba(255,255,255,.04)', text: 'rgba(255,255,255,.55)' },
-      good: { border: 'rgba(73,242,159,.5)',   bg: 'rgba(73,242,159,.15)',  text: 'rgba(73,242,159,.95)'  },
-    };
-    state.perCell.forEach((opt, i) => {
-      const tag = cellEls[i].querySelector(".sigTag");
-      const c = TYPE_COLOR[opt.type];
-      tag.textContent = TYPE_LABEL[opt.type];
-      tag.style.borderColor = c.border;
-      tag.style.background  = c.bg;
-      tag.style.color       = c.text;
-    });
+  const TYPE_LABEL = { bad: '▼ BAD', ok: '● OK', good: '▲ GOOD' };
+  const TYPE_COLOR = {
+    bad:  { border: 'rgba(255,92,108,.5)',   bg: 'rgba(255,92,108,.15)',  text: 'rgba(255,92,108,.95)'  },
+    ok:   { border: 'rgba(255,255,255,.15)', bg: 'rgba(255,255,255,.04)', text: 'rgba(255,255,255,.55)' },
+    good: { border: 'rgba(73,242,159,.5)',   bg: 'rgba(73,242,159,.15)',  text: 'rgba(73,242,159,.95)'  },
+  };
+
+  function revealSingleCell(i){
+    const opt = state.perCell[i];
+    const tag = cellEls[i].querySelector(".sigTag");
+    const c = TYPE_COLOR[opt.type];
+    tag.textContent = TYPE_LABEL[opt.type];
+    tag.style.borderColor = c.border;
+    tag.style.background  = c.bg;
+    tag.style.color       = c.text;
   }
 
-  function endRoundTimeout(){
+  function revealCellTypes(){
+    state.perCell.forEach((_, i) => revealSingleCell(i));
+  }
+
+  function endRound(fromTimeout){
     if (state.ended || state.sessionEnded) return;
     state.ended = true;
     stopLoop();
     cellEls.forEach(el => el.classList.add("disabled"));
 
-    state.timeouts += 1;
-    state.score -= 1;
-    state.decisionDots.push({ t: ROUND_SECONDS, kind: "miss" });
-
-    setHud();
-    revealCellTypes();
-
-    const badLabels = state.perCell.filter(c => c.type === 'bad').map(c => c.label).join(', ');
+    const now = performance.now();
+    const elapsed = clamp((now - state.startedAt) / 1000, 0, ROUND_SECONDS);
     const exp = state.experimentName;
-    sayResult(`No call on the bell. Bad cells [${badLabels}] of ${exp} shipped live. (\u22121)`);
 
+    // Score all stopped cells
+    let scoreParts = [];
+    state.pickedCells.forEach(i => {
+      const opt = state.perCell[i];
+      const cellType = opt.type;
+      let delta = 0, dotKind = "fp";
+
+      if (cellType === 'bad'){
+        delta = 2;
+        state.trueSignalsFound += 1;
+        dotKind = "true";
+        scoreParts.push(`CELL ${opt.label} bad (+2)`);
+      } else if (cellType === 'ok'){
+        delta = -1;
+        state.falsePositives += 1;
+        scoreParts.push(`CELL ${opt.label} ok (−1)`);
+      } else {
+        delta = -2;
+        state.falsePositives += 1;
+        state.goodStopped += 1;
+        scoreParts.push(`CELL ${opt.label} good (−2)`);
+      }
+      state.score += delta;
+      state.picks += 1;
+      state.pickTimes.push(elapsed);
+      state.decisionDots.push({ t: elapsed, kind: dotKind });
+    });
+
+    // Penalty: -1 per bad cell not stopped
+    const missedBad = state.perCell.filter((c, i) => c.type === 'bad' && !state.pickedCells.has(i));
+    if (missedBad.length > 0){
+      const penalty = missedBad.length;
+      state.score -= penalty;
+      state.timeouts += 1;
+      state.decisionDots.push({ t: ROUND_SECONDS, kind: "miss" });
+      missedBad.forEach(c => scoreParts.push(`CELL ${c.label} missed (−1)`));
+    }
+
+    // Build result line
+    let resultLine = "";
+    if (scoreParts.length === 0){
+      resultLine = `No cells stopped in ${exp}. All regressions shipped.`;
+    } else {
+      resultLine = scoreParts.join(" \u2022 ");
+    }
+
+    // In blind mode: attribute round score delta to the method used
+    if (state.gameMode === 'blind'){
+      const delta = state.score - state.roundScoreAtStart;
+      state.blindMethodScores[state.roundMethod] += delta;
+      state.blindMethodRounds[state.roundMethod].push(state.round);
+    }
+
+    revealCellTypes();
+    setHud(); // reveal method label in blind mode after round ends
+    sayResult(resultLine);
+
+    ui.nextBtn.textContent = "Next";
     ui.nextBtn.disabled = false;
+  }
+
+  function endRoundTimeout(){
+    endRound(true);
   }
 
   function pick(i){
     if (state.ended || state.sessionEnded) return;
+    if (state.pickedCells.has(i)) return;
 
-    const now = performance.now();
-    const elapsed = (now - state.startedAt) / 1000;
+    state.pickedCells.add(i);
 
-    state.ended = true;
-    state.chosen = i;
-    stopLoop();
-    cellEls.forEach(el => el.classList.add("disabled"));
-
+    // Visually mark as stopped — grey, no more interaction
     const el = cellEls[i];
-    const looksBroken = el.dataset.looksBroken === "1";
-    const cellType = state.perCell[i].type;
+    el.classList.add("stopped");
+    // Override sigTag to show STOPPED
+    const tag = el.querySelector(".sigTag");
+    tag.textContent = "STOPPED";
+    tag.style.borderColor = "rgba(255,255,255,.12)";
+    tag.style.background  = "rgba(255,255,255,.04)";
+    tag.style.color       = "rgba(255,255,255,.4)";
 
-    state.picks += 1;
-    state.pickTimes.push(elapsed);
-
-    let delta = 0;
-    let line = "";
-    let dotKind = "fp";
-    const pickedLabel = state.perCell[i].label;
-    const badLabels = state.perCell.filter(c => c.type === 'bad').map(c => c.label).join(', ');
-    const exp = state.experimentName;
-
-    if (cellType === 'bad'){
-      delta = 2;
-      state.trueSignalsFound += 1;
-      line = looksBroken
-        ? `Confirmed regression on CELL ${pickedLabel} of ${exp}. Caught clean. (+2)`
-        : `CELL ${pickedLabel} of ${exp} flagged early \u2014 confirmed broken. (+2)`;
-      dotKind = "true";
-    } else if (cellType === 'ok'){
-      delta = -1;
-      state.falsePositives += 1;
-      line = `False alarm \u2014 CELL ${pickedLabel} of ${exp} was neutral. Bad cells: [${badLabels}] still live. (\u22121)`;
-      dotKind = "fp";
-    } else {
-      delta = -2;
-      state.falsePositives += 1;
-      state.goodStopped += 1;
-      line = `Blocked a winner! CELL ${pickedLabel} of ${exp} was performing better. Bad cells: [${badLabels}] still live. (\u22122)`;
-      dotKind = "fp";
+    // If all cells stopped, end round
+    if (state.pickedCells.size === OPTS){
+      endRound(false);
     }
+  }
 
-    state.score += delta;
-
-    state.decisionDots.push({ t: clamp(elapsed, 0, ROUND_SECONDS), kind: dotKind });
-
-    setHud();
-    revealCellTypes();
-    sayResult(line);
-
-    ui.nextBtn.disabled = false;
+  function handleNextBtn(){
+    if (state.sessionEnded) return;
+    if (!state.ended) {
+      endRound(false); // "End Round" — player voluntarily ends
+    } else {
+      nextRound();     // "Next Round" — advance to next
+    }
   }
 
   function nextRound(){
@@ -1900,16 +1984,85 @@
     ui.outcomeHeadline.className = "outcomeHeadline outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
     ui.outcomeLine.textContent = res.line;
     const okStopped = state.falsePositives - state.goodStopped;
-    ui.outcomeStats.textContent = `Bad caught: ${state.trueSignalsFound} \u2022 OK stopped: ${okStopped} \u2022 Good blocked: ${state.goodStopped} \u2022 Corner: ${state.method === 'av' ? 'Blue (Anytime-Valid)' : 'Red (Fixed-Time)'}`;
+    if (state.gameMode === 'blind'){
+      ui.outcomeStats.textContent = `Bad caught: ${state.trueSignalsFound} \u2022 OK stopped: ${okStopped} \u2022 Good blocked: ${state.goodStopped} \u2022 Mode: Blind Test`;
+    } else {
+      ui.outcomeStats.textContent = `Bad caught: ${state.trueSignalsFound} \u2022 OK stopped: ${okStopped} \u2022 Good blocked: ${state.goodStopped} \u2022 Corner: ${state.method === 'av' ? 'Blue (Anytime-Valid)' : 'Red (Fixed-Time)'}`;
+    }
 
     renderReplayPicks();
     renderDecisionTimeline();
+
+    if (state.gameMode === 'blind'){
+      renderBlindReveal();
+    }
+
     injectReadingList([
       { t: "Anytime-valid linear models (Lindon 2022)", u: "https://arxiv.org/abs/2210.08589" },
     ]);
   }
 
+  function renderBlindReveal(){
+    const existing = document.getElementById("blindRevealBox");
+    if (existing) existing.remove();
+
+    const box = document.createElement("div");
+    box.id = "blindRevealBox";
+    box.style.cssText = "margin:16px 0 0; padding:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); border-radius:8px; font-size:13px;";
+
+    const title = document.createElement("div");
+    title.textContent = "BLIND TEST REVEAL";
+    title.style.cssText = "font-size:10px; letter-spacing:.18em; color:rgba(255,255,255,.5); margin-bottom:12px;";
+    box.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:12px;";
+
+    const mkCol = (label, color, rounds, score) => {
+      const col = document.createElement("div");
+      col.style.cssText = `background:rgba(${color},.07); border:1px solid rgba(${color},.2); border-radius:6px; padding:12px;`;
+      const roundStrs = rounds.length ? rounds.map(r => `R${r}`).join(' ') : 'none';
+      const sign = score >= 0 ? '+' : '';
+      col.innerHTML = `<div style="font-size:11px;letter-spacing:.15em;color:rgba(${color},.85);margin-bottom:6px;">${label}</div>
+        <div style="font-size:22px;font-weight:900;color:rgba(${color},.95);">${sign}${score}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">rounds: ${roundStrs}</div>`;
+      return col;
+    };
+
+    const avScore = state.blindMethodScores.av;
+    const fixedScore = state.blindMethodScores.fixed;
+    const avRounds = state.blindMethodRounds.av;
+    const fixedRounds = state.blindMethodRounds.fixed;
+
+    grid.appendChild(mkCol("Fixed-Time (Red)", "255,92,108", fixedRounds, fixedScore));
+    grid.appendChild(mkCol("Anytime-Valid (Blue)", "73,242,159", avRounds, avScore));
+    box.appendChild(grid);
+
+    const note = document.createElement("div");
+    note.style.cssText = "margin-top:10px; font-size:11px; color:rgba(255,255,255,.4); line-height:1.5;";
+    note.textContent = "Method switched randomly each round. CI width was varied by randomizing sample rate so you couldn\u2019t infer the method from interval width alone.";
+    box.appendChild(note);
+
+    // Insert before reading list
+    const reading = document.getElementById("readingList");
+    if (reading) reading.parentNode.insertBefore(box, reading);
+    else document.getElementById("wrappedCard").appendChild(box);
+  }
+
   function renderReplayPicks(){
+    if (state.gameMode === 'blind'){
+      // In blind mode: offer Fixed, AVI, or Blind again
+      ui.replaySameBtn.classList.remove('red', 'blue');
+      ui.replaySameTag.textContent = 'Blind Test';
+      ui.replaySameMethod.textContent = 'Method Hidden';
+
+      ui.replayOtherBtn.classList.remove('red', 'blue');
+      ui.replayOtherBtn.classList.add('red');
+      ui.replayOtherTag.textContent = 'Red Corner';
+      ui.replayOtherMethod.textContent = 'Fixed-Time';
+      return;
+    }
+
     const isAv = state.method === 'av';
     const same = { cls:'blue', tag:'Blue Corner', method:'Anytime-Valid' };
     const other = { cls:'red', tag:'Red Corner', method:'Fixed-Time' };
@@ -1963,8 +2116,8 @@
       <div class="scorecardBody">
         <div class="scorecardCell left ${tsCls[0]}"><span class="k">Regressions caught</span><span class="v">${fixed.trueSignalsFound}</span></div>
         <div class="scorecardCell ${tsCls[1]}"><span class="k">Regressions caught</span><span class="v">${av.trueSignalsFound}</span></div>
-        <div class="scorecardCell left ${fpCls[0]}"><span class="k">False alarms</span><span class="v">${fixed.falsePositives}</span></div>
-        <div class="scorecardCell ${fpCls[1]}"><span class="k">False alarms</span><span class="v">${av.falsePositives}</span></div>
+        <div class="scorecardCell left ${fpCls[0]}"><span class="k">Wrong stops</span><span class="v">${fixed.falsePositives}</span></div>
+        <div class="scorecardCell ${fpCls[1]}"><span class="k">Wrong stops</span><span class="v">${av.falsePositives}</span></div>
         <div class="scorecardCell left ${scCls[0]}"><span class="k">Score</span><span class="v">${fixed.score >= 0 ? '+' : ''}${fixed.score}</span></div>
         <div class="scorecardCell ${scCls[1]}"><span class="k">Score</span><span class="v">${av.score >= 0 ? '+' : ''}${av.score}</span></div>
       </div>
@@ -2136,7 +2289,7 @@
 
     const stats = [
       ["Regressions caught", String(state.trueSignalsFound)],
-      ["False alarms", String(state.falsePositives)],
+      ["Wrong stops", String(state.falsePositives)],
       ["Score", (state.score >= 0 ? '+' : '') + String(state.score)],
     ];
     const colW = scW / stats.length;
@@ -2210,7 +2363,7 @@
   }
 
   ui.nextBtn.addEventListener("click", () => {
-    if (!ui.nextBtn.disabled) nextRound();
+    if (!ui.nextBtn.disabled) handleNextBtn();
   });
 
   function restart(){
@@ -2222,11 +2375,13 @@
 
     state.method = 'fixed';
     state.runs = { fixed: null, av: null };
+    state.gameMode = 'fixed';
 
     state.ended = false;
     state.chosen = null;
     state.perCell = [];
     state.cellTypes = [];
+    state.pickedCells = new Set();
 
     state.picks = 0;
     state.trueSignalsFound = 0;
@@ -2241,9 +2396,12 @@
     ui.wrappedBox.classList.remove("show");
     ui.halftimeBox.classList.remove("show");
     ui.nextBtn.disabled = true;
+    ui.nextBtn.textContent = "Next";
 
     const existing = document.getElementById("scorecardBox");
     if (existing) existing.remove();
+    const blindBox = document.getElementById("blindRevealBox");
+    if (blindBox) blindBox.remove();
 
     ui.introBox.classList.remove("hide");
   }
@@ -2255,8 +2413,13 @@
   }
 
   ui.restartBtn.addEventListener("click", restart);
-  ui.replaySameBtn.addEventListener("click", () => replayWithCorner(state.method));
-  ui.replayOtherBtn.addEventListener("click", () => replayWithCorner(state.method === 'av' ? 'fixed' : 'av'));
+  ui.replaySameBtn.addEventListener("click", () => {
+    replayWithCorner(state.gameMode === 'blind' ? 'blind' : state.method);
+  });
+  ui.replayOtherBtn.addEventListener("click", () => {
+    if (state.gameMode === 'blind') replayWithCorner('fixed');
+    else replayWithCorner(state.method === 'av' ? 'fixed' : 'av');
+  });
 
   ui.downloadBtn.addEventListener("click", downloadWrappedImage);
 
@@ -2320,7 +2483,7 @@
     ui.outcomeHeadline.textContent = res.headline;
     ui.outcomeHeadline.className = "outcomeHeadline outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
     ui.outcomeLine.textContent = res.line;
-    ui.outcomeStats.textContent = `Regressions caught: ${ts} • False alarms: ${fp}`;
+    ui.outcomeStats.textContent = `Bad caught: ${ts} • Wrong stops: ${fp}`;
 
     renderScorecard();
     renderDecisionTimeline();
@@ -2337,7 +2500,10 @@
   ui.startBlueBtn = $("startBlueBtn");
 
   function startGame(method){
-    state.method = (method === 'av') ? 'av' : 'fixed';
+    state.gameMode = method; // 'fixed' | 'av' | 'blind'
+    state.method = (method === 'av') ? 'av' : 'fixed'; // starting method (blind overrides per-round)
+    state.blindMethodRounds = { fixed: [], av: [] };
+    state.blindMethodScores = { fixed: 0, av: 0 };
     applyMethodTint();
     ui.introBox.classList.add("hide");
     state.experimentPool = shuffledExperiments().slice(0, TOTAL_ROUNDS);
@@ -2357,6 +2523,8 @@
 
   ui.startRedBtn.addEventListener("click", () => startGame('fixed'));
   ui.startBlueBtn.addEventListener("click", () => startGame('av'));
+  ui.startBlindBtn = $("startBlindBtn");
+  ui.startBlindBtn.addEventListener("click", () => startGame('blind'));
 
   window.addEventListener("keydown", (e) => {
     const activeElement = document.activeElement;
@@ -2370,7 +2538,7 @@
       const idx = parseInt(k, 10) - 1;
       if (idx >= 0 && idx < OPTS) pick(idx);
     } else if (k === "n"){
-      if (!ui.nextBtn.disabled) nextRound();
+      if (!ui.nextBtn.disabled) handleNextBtn();
     } else if (k === "r"){
       restart();
     }
