@@ -1308,11 +1308,11 @@
     chosen: null,
 
     perCell: [],
-    winnerIdx: 0,
+    cellTypes: [],
 
     picks: 0,
     trueSignalsFound: 0,
-    rightButNotSig: 0,
+    goodStopped: 0,
     noiseInconclusive: 0,
     timeouts: 0,
     pickTimes: [],
@@ -1507,7 +1507,7 @@
       score: state.score,
       trueSignalsFound: state.trueSignalsFound,
       falsePositives: state.falsePositives,
-      rightButNotSig: state.rightButNotSig,
+      goodStopped: state.goodStopped,
       noiseInconclusive: state.noiseInconclusive,
       timeouts: state.timeouts,
       picks: state.picks,
@@ -1524,7 +1524,7 @@
       score: total.score - atHT.score,
       trueSignalsFound: total.trueSignalsFound - atHT.trueSignalsFound,
       falsePositives: total.falsePositives - atHT.falsePositives,
-      rightButNotSig: total.rightButNotSig - atHT.rightButNotSig,
+      goodStopped: total.goodStopped - atHT.goodStopped,
       noiseInconclusive: total.noiseInconclusive - atHT.noiseInconclusive,
       timeouts: total.timeouts - atHT.timeouts,
       picks: total.picks - atHT.picks,
@@ -1564,29 +1564,41 @@
       if (sub) sub.textContent = state.experimentName;
     });
 
-    state.winnerIdx = Math.floor(rand() * OPTS);
+    // Assign each cell a type: 2/6 bad, 3/6 ok, 1/6 good
+    state.cellTypes = [];
+    for (let i = 0; i < OPTS; i++) {
+      const r = rand();
+      state.cellTypes.push(r < 2/6 ? 'bad' : r < 5/6 ? 'ok' : 'good');
+    }
+    // Guarantee at least 1 bad cell per round
+    if (!state.cellTypes.includes('bad')) {
+      state.cellTypes[Math.floor(rand() * OPTS)] = 'bad';
+    }
 
     const p0 = baselineP();
     const up = upliftAbs();
 
     state.perCell = [];
     for (let i=0;i<OPTS;i++){
-      const isBroken = (i === state.winnerIdx);
+      const type = state.cellTypes[i];
       const pC = clamp(p0 + (rand()-0.5)*0.01, 0.001, 0.999);
-      // Broken cell: negative effect (regression). Others: A/A (no real effect).
-      const pT = clamp(pC + (isBroken ? -up : 0), 0.001, 0.999);
+      // bad: negative effect (regression), good: positive effect (improvement), ok: null (A/A)
+      const pT = clamp(pC + (type === 'bad' ? -up : type === 'good' ? +up : 0), 0.001, 0.999);
 
       let ghost = 0;
-      if (!isBroken && rand() < GHOST_PROB){
+      if (type === 'ok' && rand() < GHOST_PROB){
         const sign = (rand() < 0.75 ? +1 : -1);
         ghost = sign * (GHOST_MAG_MIN + rand()*(GHOST_MAG_MAX - GHOST_MAG_MIN));
       }
-      if (isBroken && rand() < 0.22){
-        ghost = (0.002 + rand()*0.004);
+      if (type === 'bad' && rand() < 0.22){
+        ghost = (0.002 + rand()*0.004);  // slight positive ghost to confuse
+      }
+      if (type === 'good' && rand() < 0.22){
+        ghost = -(0.002 + rand()*0.004); // slight negative ghost to confuse
       }
       const ghostTau = GHOST_TAU_MIN + rand()*(GHOST_TAU_MAX - GHOST_TAU_MIN);
 
-      state.perCell.push({ pC, pT, xC:0, xT:0, n:0, ghost, ghostTau, label:String(i+1) });
+      state.perCell.push({ pC, pT, xC:0, xT:0, n:0, ghost, ghostTau, label:String(i+1), type });
     }
 
     state.startedAt = performance.now();
@@ -1703,6 +1715,23 @@
 
   }
 
+  function revealCellTypes(){
+    const TYPE_LABEL = { bad: '▼ BAD', ok: '● OK', good: '▲ GOOD' };
+    const TYPE_COLOR = {
+      bad:  { border: 'rgba(255,92,108,.5)',   bg: 'rgba(255,92,108,.15)',  text: 'rgba(255,92,108,.95)'  },
+      ok:   { border: 'rgba(255,255,255,.15)', bg: 'rgba(255,255,255,.04)', text: 'rgba(255,255,255,.55)' },
+      good: { border: 'rgba(73,242,159,.5)',   bg: 'rgba(73,242,159,.15)',  text: 'rgba(73,242,159,.95)'  },
+    };
+    state.perCell.forEach((opt, i) => {
+      const tag = cellEls[i].querySelector(".sigTag");
+      const c = TYPE_COLOR[opt.type];
+      tag.textContent = TYPE_LABEL[opt.type];
+      tag.style.borderColor = c.border;
+      tag.style.background  = c.bg;
+      tag.style.color       = c.text;
+    });
+  }
+
   function endRoundTimeout(){
     if (state.ended || state.sessionEnded) return;
     state.ended = true;
@@ -1714,10 +1743,11 @@
     state.decisionDots.push({ t: ROUND_SECONDS, kind: "miss" });
 
     setHud();
+    revealCellTypes();
 
-    const brokenLabel = state.perCell[state.winnerIdx].label;
+    const badLabels = state.perCell.filter(c => c.type === 'bad').map(c => c.label).join(', ');
     const exp = state.experimentName;
-    sayResult(`No call on the bell. CELL ${brokenLabel} of ${exp} broke and shipped live. (\u22121)`);
+    sayResult(`No call on the bell. Bad cells [${badLabels}] of ${exp} shipped live. (\u22121)`);
 
     ui.nextBtn.disabled = false;
   }
@@ -1735,29 +1765,35 @@
 
     const el = cellEls[i];
     const looksBroken = el.dataset.looksBroken === "1";
-    const isBroken = (i === state.winnerIdx);
+    const cellType = state.perCell[i].type;
 
     state.picks += 1;
     state.pickTimes.push(elapsed);
 
     let delta = 0;
     let line = "";
-    let dotKind = "earlytrue";
+    let dotKind = "fp";
     const pickedLabel = state.perCell[i].label;
-    const brokenLabel = state.perCell[state.winnerIdx].label;
+    const badLabels = state.perCell.filter(c => c.type === 'bad').map(c => c.label).join(', ');
     const exp = state.experimentName;
 
-    if (isBroken){
-      delta = 1;
+    if (cellType === 'bad'){
+      delta = 2;
       state.trueSignalsFound += 1;
       line = looksBroken
-        ? `Confirmed regression on CELL ${brokenLabel} of ${exp}. Caught clean. (+1)`
-        : `CELL ${brokenLabel} of ${exp} flagged early \u2014 confirmed broken. (+1)`;
+        ? `Confirmed regression on CELL ${pickedLabel} of ${exp}. Caught clean. (+2)`
+        : `CELL ${pickedLabel} of ${exp} flagged early \u2014 confirmed broken. (+2)`;
       dotKind = "true";
-    } else {
+    } else if (cellType === 'ok'){
       delta = -1;
       state.falsePositives += 1;
-      line = `False alarm on CELL ${pickedLabel} of ${exp}. Real break was CELL ${brokenLabel} \u2014 still shipping. (\u22121)`;
+      line = `False alarm \u2014 CELL ${pickedLabel} of ${exp} was neutral. Bad cells: [${badLabels}] still live. (\u22121)`;
+      dotKind = "fp";
+    } else {
+      delta = -2;
+      state.falsePositives += 1;
+      state.goodStopped += 1;
+      line = `Blocked a winner! CELL ${pickedLabel} of ${exp} was performing better. Bad cells: [${badLabels}] still live. (\u22122)`;
       dotKind = "fp";
     }
 
@@ -1766,6 +1802,7 @@
     state.decisionDots.push({ t: clamp(elapsed, 0, ROUND_SECONDS), kind: dotKind });
 
     setHud();
+    revealCellTypes();
     sayResult(line);
 
     ui.nextBtn.disabled = false;
@@ -1821,9 +1858,9 @@
   }
 
   function getEventOutcome(fp, ts, rbe, to){
-    const score = ts - fp;
-    const bigSuccess = (ts >= 4 && fp <= 2) || score >= 3;
-    const bigFailure = fp >= 5 || score <= -3;
+    const score = state.score;
+    const bigSuccess = (ts >= 4 && fp <= 1) || score >= 6;
+    const bigFailure = (state.goodStopped >= 3) || score <= -6;
 
     if (bigSuccess){
       return {
@@ -1857,12 +1894,13 @@
 
     ui.wrappedTitle.textContent = "Main Event • Final Score";
 
-    const res = getEventOutcome(state.falsePositives, state.trueSignalsFound, state.rightButNotSig, state.timeouts);
+    const res = getEventOutcome(state.falsePositives, state.trueSignalsFound, state.goodStopped, state.timeouts);
     ui.wrappedOutcome.className = "wrappedOutcome outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
     ui.outcomeHeadline.textContent = res.headline;
     ui.outcomeHeadline.className = "outcomeHeadline outcome" + (res.outcome === "success" ? "Success" : res.outcome === "failure" ? "Failure" : "Issues");
     ui.outcomeLine.textContent = res.line;
-    ui.outcomeStats.textContent = `Regressions caught: ${state.trueSignalsFound} \u2022 False alarms: ${state.falsePositives} \u2022 Corner: ${state.method === 'av' ? 'Blue (Anytime-Valid)' : 'Red (Fixed-Time)'}`;
+    const okStopped = state.falsePositives - state.goodStopped;
+    ui.outcomeStats.textContent = `Bad caught: ${state.trueSignalsFound} \u2022 OK stopped: ${okStopped} \u2022 Good blocked: ${state.goodStopped} \u2022 Corner: ${state.method === 'av' ? 'Blue (Anytime-Valid)' : 'Red (Fixed-Time)'}`;
 
     renderReplayPicks();
     renderDecisionTimeline();
@@ -1985,7 +2023,7 @@
     const line = ui.outcomeLine.textContent || "";
     const fp = state.falsePositives;
     const ts = state.trueSignalsFound;
-    const res = getEventOutcome(fp, ts, state.rightButNotSig, state.timeouts);
+    const res = getEventOutcome(fp, ts, state.goodStopped, state.timeouts);
 
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
@@ -2188,11 +2226,11 @@
     state.ended = false;
     state.chosen = null;
     state.perCell = [];
-    state.winnerIdx = 0;
+    state.cellTypes = [];
 
     state.picks = 0;
     state.trueSignalsFound = 0;
-    state.rightButNotSig = 0;
+    state.goodStopped = 0;
     state.noiseInconclusive = 0;
     state.timeouts = 0;
     state.pickTimes = [];
@@ -2224,9 +2262,9 @@
 
   function encodeResults(){
     const { fixed, av } = halfStats();
-    const r1 = `${fixed.falsePositives},${fixed.trueSignalsFound},${fixed.rightButNotSig},${fixed.timeouts}`;
-    const r2 = `${av.falsePositives},${av.trueSignalsFound},${av.rightButNotSig},${av.timeouts}`;
-    const total = `${state.falsePositives},${state.trueSignalsFound},${state.rightButNotSig},${state.timeouts}`;
+    const r1 = `${fixed.falsePositives},${fixed.trueSignalsFound},${fixed.goodStopped},${fixed.timeouts}`;
+    const r2 = `${av.falsePositives},${av.trueSignalsFound},${av.goodStopped},${av.timeouts}`;
+    const total = `${state.falsePositives},${state.trueSignalsFound},${state.goodStopped},${state.timeouts}`;
     const dd = state.decisionDots.map(d => `${d.t.toFixed(1)}${d.kind[0]}`).join('-');
     return `?r=${total}&r1=${r1}&r2=${r2}&d=${dd}`;
   }
@@ -2263,14 +2301,14 @@
 
     state.falsePositives = fp;
     state.trueSignalsFound = ts;
-    state.rightButNotSig = rbe;
+    state.goodStopped = rbe;
     state.timeouts = to;
     state.decisionDots = decisionDots;
     state.sessionEnded = true;
 
-    state.runs.fixed = { score: ts1 - fp1, trueSignalsFound: ts1, falsePositives: fp1, rightButNotSig: rbe1, timeouts: to1, noiseInconclusive: 0, picks: 0 };
-    state.runs.av    = { score: ts - fp - (ts1 - fp1), trueSignalsFound: ts - ts1, falsePositives: fp - fp1, rightButNotSig: rbe - rbe1, timeouts: to - to1, noiseInconclusive: 0, picks: 0 };
-    state.score = ts - fp;
+    state.runs.fixed = { score: ts1 - fp1, trueSignalsFound: ts1, falsePositives: fp1, goodStopped: rbe1, timeouts: to1, noiseInconclusive: 0, picks: 0 };
+    state.runs.av    = { score: ts - fp - (ts1 - fp1), trueSignalsFound: ts - ts1, falsePositives: fp - fp1, goodStopped: rbe - rbe1, timeouts: to - to1, noiseInconclusive: 0, picks: 0 };
+    state.score = ts * 2 - fp;
 
     ui.board.classList.add("dim");
     ui.wrappedBox.classList.add("show");
